@@ -1,4 +1,4 @@
-import type { Book, User, Author, Order, Announcement, UISettings } from '../types';
+import type { Book, User, Author, Order, Announcement, UISettings, AuthorApplication } from '../types';
 
 // ── Mock Books ────────────────────────────────────────────────
 export const mockBooks: Book[] = [
@@ -187,5 +187,117 @@ export function getDashboardStats() {
   const totalUsers = mockUsers.length;
   const totalRevenue = mockBooks.reduce((sum, b) => sum + b.revenue, 0);
   const totalOrders = mockOrders.length;
-  return { totalBooks, publishedBooks, pendingBooks, totalUsers, totalRevenue, totalOrders };
+  const pendingApplications = mockApplications.filter(a => a.status === 'pending').length;
+  return { totalBooks, publishedBooks, pendingBooks, totalUsers, totalRevenue, totalOrders, pendingApplications };
 }
+
+// ── Mock Author Applications ───────────────────────────────────
+export const mockApplications: AuthorApplication[] = [
+  {
+    id: 'appl1',
+    userId: 'u3',
+    userName: 'Zosangzuali',
+    userEmail: 'zuali@gmail.com',
+    avatarColor: '#34D399',
+    bio: 'I am a storyteller from Aizawl with a deep love for Mizo folk tales. I have been writing short stories for community newsletters for the past 5 years and am now ready to publish my first full-length book.',
+    status: 'pending',
+    submittedAt: '2026-04-08T10:30:00Z',
+    books: [
+      {
+        id: 'bs1',
+        title: 'Thlipui Kawng',
+        description: 'A collection of traditional Mizo folk tales retold through a modern lens.',
+        genre: 'Fiction',
+        language: 'Mizo',
+        price: 129,
+        pages: 248,
+        coverColor: 'linear-gradient(135deg,#34D399,#065F46)',
+        submittedAt: '2026-04-08T10:30:00Z',
+      },
+      {
+        id: 'bs2',
+        title: 'Lunglen Thu',
+        description: 'Short stories about nostalgia, identity, and belonging in modern Mizoram.',
+        genre: 'Short Stories',
+        language: 'Mizo',
+        price: 99,
+        pages: 162,
+        coverColor: 'linear-gradient(135deg,#6EE7B7,#047857)',
+        submittedAt: '2026-04-08T10:30:00Z',
+      },
+    ],
+  },
+  {
+    id: 'appl2',
+    userId: 'u9',
+    userName: 'Hminga Tlau',
+    userEmail: 'hminga.t@mail.com',
+    avatarColor: '#F472B6',
+    bio: 'Academic researcher and cultural scholar at Mizoram University. I specialize in the pre-colonial history of the Zo people and have published several research papers in international journals.',
+    status: 'pending',
+    submittedAt: '2026-04-07T14:15:00Z',
+    books: [
+      {
+        id: 'bs3',
+        title: 'Zo People: Origins',
+        description: 'An academic exploration of the Zo people\'s migration history and cultural roots.',
+        genre: 'History',
+        language: 'English',
+        price: 279,
+        pages: 412,
+        coverColor: 'linear-gradient(135deg,#F472B6,#9D174D)',
+        submittedAt: '2026-04-07T14:15:00Z',
+      },
+    ],
+  },
+  {
+    id: 'appl3',
+    userId: 'u7',
+    userName: 'Sanga Malsawm',
+    userEmail: 'sanga@gmail.com',
+    avatarColor: '#22D3EE',
+    bio: 'Poet and musician based in Yangon. My work bridges the Mizo diaspora in Myanmar and back home, exploring themes of longing, faith and cultural identity.',
+    status: 'approved',
+    submittedAt: '2026-03-20T09:00:00Z',
+    reviewedAt: '2026-03-22T11:30:00Z',
+    books: [
+      {
+        id: 'bs4',
+        title: 'Hla Ropui',
+        description: 'A poetry collection that blends Mizo traditional rhythms with contemporary themes.',
+        genre: 'Poetry',
+        language: 'Mizo',
+        price: 89,
+        pages: 128,
+        coverColor: 'linear-gradient(135deg,#22D3EE,#0E7490)',
+        submittedAt: '2026-03-20T09:00:00Z',
+      },
+    ],
+  },
+  {
+    id: 'appl4',
+    userId: 'u10',
+    userName: 'Vanlalmawii',
+    userEmail: 'mawii99@gmail.com',
+    avatarColor: '#FBBF24',
+    bio: 'Self-taught writer with three unpublished manuscripts. I write romance and drama set against the backdrop of contemporary Mizo society.',
+    status: 'rejected',
+    submittedAt: '2026-03-15T16:45:00Z',
+    reviewedAt: '2026-03-18T10:00:00Z',
+    reviewNote: 'The submitted manuscript requires significant editing before it meets our publication standards. We encourage you to revise and reapply.',
+    books: [
+      {
+        id: 'bs5',
+        title: 'Nuam Toh',
+        description: 'A romantic drama set in modern-day Aizawl.',
+        genre: 'Novel',
+        language: 'Mizo',
+        price: 119,
+        pages: 310,
+        coverColor: 'linear-gradient(135deg,#FBBF24,#92400E)',
+        submittedAt: '2026-03-15T16:45:00Z',
+      },
+    ],
+  },
+];
+

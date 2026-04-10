@@ -8,7 +8,7 @@ import {
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { mockBooks, mockUsers, mockOrders, revenueChartData, getDashboardStats } from '../../store/mockData';
+import { mockBooks, mockUsers, mockOrders, revenueChartData, getDashboardStats, mockApplications } from '../../store/mockData';
 import { format } from 'date-fns';
 
 const stats = getDashboardStats();
@@ -87,6 +87,7 @@ function BookRow({ book }: { book: typeof mockBooks[0] }) {
 export default function DashboardPage() {
   const [chartView] = useState<'revenue' | 'orders'>('revenue');
   const pendingBooks = mockBooks.filter(b => b.status === 'pending');
+  const pendingApps = mockApplications.filter(a => a.status === 'pending');
   const recentOrders = mockOrders.slice(0, 4);
   const topBooks = [...mockBooks].filter(b => b.status === 'approved').sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
@@ -124,6 +125,19 @@ export default function DashboardPage() {
             <strong style={{ color: 'var(--color-gold)' }}>{pendingBooks.length} books</strong> are waiting for your review —&nbsp;
           </span>
           <Link to="/books?tab=pending" style={{ color: 'var(--color-gold)', fontWeight: 600, textDecoration: 'underline' }}>
+            Review now →
+          </Link>
+        </div>
+      )}
+
+      {/* Quick actions: Pending Author Applications */}
+      {pendingApps.length > 0 && (
+        <div className="announcement-banner animate-fade-in-up stagger-3" style={{ marginBottom: 'var(--space-md)', borderColor: 'var(--color-blue)30', background: 'rgba(79,142,247,0.06)' }}>
+          <Clock size={16} style={{ color: 'var(--color-blue)', flexShrink: 0 }} />
+          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+            <strong style={{ color: 'var(--color-blue)' }}>{pendingApps.length} author application{pendingApps.length > 1 ? 's' : ''}</strong> pending review —&nbsp;
+          </span>
+          <Link to="/applications" style={{ color: 'var(--color-blue)', fontWeight: 600, textDecoration: 'underline' }}>
             Review now →
           </Link>
         </div>

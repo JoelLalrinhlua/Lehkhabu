@@ -1,16 +1,25 @@
-import type { Book } from '../../types';
+import type { DisplayBook } from '../../types/display';
 
 interface BookCoverProps {
-  book: Book;
+  book: DisplayBook;
   className?: string;
   style?: React.CSSProperties;
 }
 
+const FALLBACK_COLORS = ['#C17817', '#8B4513'];
+
 export default function BookCover({ book, className = '', style }: BookCoverProps) {
-  if (book.coverImage) {
+  // Support both Supabase and legacy cover image fields
+  const coverImg = book.cover_image_url ?? book.coverImage ?? null;
+  const primary = book.cover_color_primary ?? book.coverColors?.[0] ?? FALLBACK_COLORS[0];
+  const secondary = book.cover_color_secondary ?? book.coverColors?.[1] ?? FALLBACK_COLORS[1];
+  const textColor = book.coverTextColor ?? '#fff';
+  const authorText = book.author_name ?? book.author ?? '';
+
+  if (coverImg) {
     return (
       <div className={className} style={style}>
-        <img src={book.coverImage} alt={book.title} loading="lazy" />
+        <img src={coverImg} alt={book.title} loading="lazy" />
       </div>
     );
   }
@@ -18,14 +27,11 @@ export default function BookCover({ book, className = '', style }: BookCoverProp
   return (
     <div
       className={className}
-      style={{
-        ...style,
-        background: `linear-gradient(135deg, ${book.coverColors[0]}, ${book.coverColors[1]})`,
-      }}
+      style={{ ...style, background: `linear-gradient(135deg, ${primary}, ${secondary})` }}
     >
-      <div className="book-cover-gradient" style={{ color: book.coverTextColor }}>
+      <div className="book-cover-gradient" style={{ color: textColor }}>
         <span className="book-cover-title">{book.title}</span>
-        <span className="book-cover-author">{book.author}</span>
+        {authorText && <span className="book-cover-author">{authorText}</span>}
       </div>
     </div>
   );

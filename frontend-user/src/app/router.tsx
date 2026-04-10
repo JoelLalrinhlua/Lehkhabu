@@ -1,29 +1,50 @@
 import { createBrowserRouter } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
+import ProtectedRoute from '../components/auth/ProtectedRoute';
+import AuthPage from '../pages/AuthPage';
 import HomePage from '../pages/HomePage';
 import ExplorePage from '../pages/ExplorePage';
 import LibraryPage from '../pages/LibraryPage';
 import BookDetailPage from '../pages/BookDetailPage';
 import ProfilePage from '../pages/ProfilePage';
 import ReaderPage from '../pages/ReaderPage';
+import AuthorApplicationPage from '../pages/AuthorApplicationPage';
+import AuthorDashboardPage from '../pages/AuthorDashboardPage';
 
 export const router = createBrowserRouter([
+  // Public auth route
   {
-    // All main app pages share the AppLayout (top header + bottom nav)
+    path: '/auth',
+    element: <AuthPage />,
+  },
+
+  // All main app pages — protected behind login
+  {
     path: '/',
-    element: <AppLayout />,
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
     children: [
-      { index: true,           element: <HomePage />     },
-      { path: 'explore',       element: <ExplorePage />  },
-      { path: 'search',        element: <ExplorePage />  }, // alias for nav
-      { path: 'library',       element: <LibraryPage />  },
-      { path: 'book/:id',      element: <BookDetailPage /> },
-      { path: 'profile',       element: <ProfilePage />  },
+      { index: true,           element: <HomePage />              },
+      { path: 'explore',       element: <ExplorePage />           },
+      { path: 'search',        element: <ExplorePage />           },
+      { path: 'library',       element: <LibraryPage />           },
+      { path: 'book/:id',      element: <BookDetailPage />        },
+      { path: 'profile',       element: <ProfilePage />           },
+      { path: 'apply',         element: <AuthorApplicationPage /> },
+      { path: 'author',        element: <AuthorDashboardPage />   },
     ],
   },
+
+  // ReaderPage is standalone — full-screen, no AppLayout chrome, still protected
   {
-    // ReaderPage is standalone — full-screen, no AppLayout chrome
     path: '/read/:id',
-    element: <ReaderPage />,
+    element: (
+      <ProtectedRoute>
+        <ReaderPage />
+      </ProtectedRoute>
+    ),
   },
 ]);

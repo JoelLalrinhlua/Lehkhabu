@@ -3,6 +3,7 @@ export type BookStatus = 'approved' | 'pending' | 'rejected' | 'draft';
 export type UserRole = 'user' | 'admin' | 'author';
 export type UserStatus = 'active' | 'suspended';
 export type OrderStatus = 'completed' | 'refunded' | 'pending';
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Book {
   id: string;
@@ -92,4 +93,30 @@ export interface UISettings {
   newBooksHighlight: boolean;
   announcementBannerText: string;
   announcementBannerActive: boolean;
+}
+
+export interface BookSubmission {
+  id: string;
+  title: string;
+  description: string;
+  genre: string;
+  language: string;
+  price: number;
+  pages: number;
+  coverColor: string;
+  submittedAt: string;
+}
+
+export interface AuthorApplication {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  avatarColor: string;
+  bio: string;
+  status: ApplicationStatus;
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  books: BookSubmission[];
 }

@@ -3,8 +3,9 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, Users, UserCheck, BarChart3,
   Settings, Bell, Search, Menu, X, LogOut, ChevronDown,
-  Megaphone, ShoppingCart, Star, Sliders
+  Megaphone, ShoppingCart, Star, Sliders, ClipboardList
 } from 'lucide-react';
+import { mockApplications } from '../../store/mockData';
 import '../../App.css';
 
 // ── Toast Context ──────────────────────────────────────────────
@@ -15,13 +16,16 @@ export const ToastContext = createContext<ToastCtx>({ addToast: () => {} });
 export function useToast() { return useContext(ToastContext); }
 
 // ── Nav Items ──────────────────────────────────────────────────
+const pendingAppsCount = mockApplications.filter(a => a.status === 'pending').length;
+
 const mainNav = [
-  { to: '/',         label: 'Dashboard',    icon: LayoutDashboard },
-  { to: '/books',    label: 'Books',        icon: BookOpen,    badge: 2 },
-  { to: '/authors',  label: 'Authors',      icon: Star },
-  { to: '/users',    label: 'Users',        icon: Users },
-  { to: '/orders',   label: 'Orders',       icon: ShoppingCart },
-  { to: '/analytics',label: 'Analytics',    icon: BarChart3 },
+  { to: '/',              label: 'Dashboard',    icon: LayoutDashboard },
+  { to: '/books',         label: 'Books',        icon: BookOpen,       badge: 2 },
+  { to: '/authors',       label: 'Authors',      icon: Star },
+  { to: '/users',         label: 'Users',        icon: Users },
+  { to: '/applications',  label: 'Applications', icon: ClipboardList,  badge: pendingAppsCount || undefined },
+  { to: '/orders',        label: 'Orders',       icon: ShoppingCart },
+  { to: '/analytics',     label: 'Analytics',    icon: BarChart3 },
 ];
 const managementNav = [
   { to: '/announcements', label: 'Announcements', icon: Megaphone },
@@ -112,6 +116,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
     '/books': 'Books',
     '/authors': 'Authors',
     '/users': 'Users',
+    '/applications': 'Author Applications',
     '/orders': 'Orders',
     '/analytics': 'Analytics',
     '/announcements': 'Announcements',
