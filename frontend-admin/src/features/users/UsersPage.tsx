@@ -1,50 +1,99 @@
-import { useState } from 'react';
-import { Search, UserPlus, MoreVertical, ShieldBan, UserCheck, Trash2, Eye, XCircle, Mail, Activity } from 'lucide-react';
-import { mockUsers } from '../../store/mockData';
-import type { User, UserStatus } from '../../types';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, MoreVertical, ShieldBan, UserCheck, Eye, XCircle, Mail, RefreshCw, AlertCircle, Shield } from 'lucide-react';
+import { fetchUsers, updateUserActive, updateUserRole, type AdminUser } from '../../services/users.service';
 import { useToast } from '../../components/layout/AdminLayout';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 
-const roleTabs: { key: 'all' | User['role']; label: string }[] = [
+const roleTabs: { key: 'all' | AdminUser['role']; label: string }[] = [
   { key: 'all', label: 'All Users' },
-  { key: 'user', label: 'Readers' },
-  { key: 'author', label: 'Authors' },
-  { key: 'admin', label: 'Admins' },
+  { key: 'USER', label: 'Readers' },
+  { key: 'AUTHOR', label: 'Authors' },
+  { key: 'ADMIN', label: 'Admins' },
 ];
+
+const avatarColors = ['gold', 'blue', 'green', 'purple', 'red', 'cyan'];
 
 export default function UsersPage() {
   const { addToast } = useToast();
-  const [usersData, setUsersData] = useState<User[]>(mockUsers);
-  const [activeRole, setActiveRole] = useState<'all' | User['role']>('all');
-  const [activeStatus, setActiveStatus] = useState<'all' | UserStatus>('all');
+  const [usersData, setUsersData] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeRole, setActiveRole] = useState<'all' | AdminUser['role']>('all');
+  const [activeStatus, setActiveStatus] = useState<'all' | 'active' | 'suspended'>('all');
   const [search, setSearch] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [viewUser, setViewUser] = useState<User | null>(null);
+  const [viewUser, setViewUser] = useState<AdminUser | null>(null);
+  const [mutatingId, setMutatingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchUsers();
+      setUsersData(data);
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Close menu on outside click
+  useEffect(() => {
+    const handler = () => setOpenMenuId(null);
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
+  }, []);
 
   const filtered = usersData
     .filter(u => activeRole === 'all' || u.role === activeRole)
-    .filter(u => activeStatus === 'all' || u.status === activeStatus)
+    .filter(u => {
+      if (activeStatus === 'all') return true;
+      if (activeStatus === 'active') return u.isActive;
+      return !u.isActive;
+    })
     .filter(u =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
+      u.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+      u.email?.toLowerCase().includes(search.toLowerCase()) ||
+      u.username?.toLowerCase().includes(search.toLowerCase())
     );
 
-  function toggleSuspend(id: string) {
-    setUsersData(prev => prev.map(u => u.id === id
-      ? { ...u, status: u.status === 'active' ? 'suspended' : 'active' }
-      : u));
-    const user = usersData.find(u => u.id === id);
-    addToast(user?.status === 'active' ? 'User suspended.' : 'User reactivated!', user?.status === 'active' ? 'error' : 'success');
-    setOpenMenuId(null);
+  async function toggleSuspend(user: AdminUser) {
+    setMutatingId(user.id);
+    try {
+      await updateUserActive(user.id, !user.isActive);
+      addToast(user.isActive ? 'User suspended.' : 'User reactivated!', user.isActive ? 'error' : 'success');
+      await load();
+      if (viewUser?.id === user.id) setViewUser(null);
+    } catch {
+      addToast('Failed to update user status.', 'error');
+    } finally {
+      setMutatingId(null);
+      setOpenMenuId(null);
+    }
   }
 
-  function changeRole(id: string, role: User['role']) {
-    setUsersData(prev => prev.map(u => u.id === id ? { ...u, role } : u));
-    addToast(`Role updated to ${role}`, 'success');
-    setOpenMenuId(null);
+  async function changeRole(user: AdminUser, role: AdminUser['role']) {
+    setMutatingId(user.id);
+    try {
+      await updateUserRole(user.id, role);
+      addToast(`Role updated to ${role}`, 'success');
+      await load();
+    } catch {
+      addToast('Failed to update role.', 'error');
+    } finally {
+      setMutatingId(null);
+      setOpenMenuId(null);
+    }
   }
 
-  const avatarColors = ['gold', 'blue', 'green', 'purple', 'red', 'cyan'];
+  const getRoleBadge = (role: AdminUser['role']) => {
+    if (role === 'ADMIN') return 'badge-admin';
+    if (role === 'AUTHOR') return 'badge-featured';
+    return 'badge-active';
+  };
 
   return (
     <div>
@@ -54,21 +103,27 @@ export default function UsersPage() {
             <h1>Users</h1>
             <p>Manage platform users, authors and administrators.</p>
           </div>
-          <div className="page-header-actions">
-            <button className="btn btn-primary" id="add-user-btn">
-              <UserPlus size={16} /> Add User
-            </button>
-          </div>
+          <button className="btn btn-secondary btn-sm" onClick={load} id="refresh-users-btn">
+            <RefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
+
+      {error && (
+        <div className="announcement-banner" style={{ marginBottom: 'var(--space-md)', borderColor: 'var(--color-red)', background: 'rgba(239,68,68,0.06)' }}>
+          <AlertCircle size={16} style={{ color: 'var(--color-red)', flexShrink: 0 }} />
+          <span style={{ color: 'var(--color-red)' }}>{error}</span>
+          <button className="btn btn-secondary btn-sm" onClick={load}>Retry</button>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 'var(--space-md)' }}>
         {[
-          { label: 'Total Users', value: usersData.length, color: 'var(--color-blue)', dim: 'var(--color-blue-dim)' },
-          { label: 'Active', value: usersData.filter(u => u.status === 'active').length, color: 'var(--color-green)', dim: 'var(--color-green-dim)' },
-          { label: 'Suspended', value: usersData.filter(u => u.status === 'suspended').length, color: 'var(--color-red)', dim: 'var(--color-red-dim)' },
-          { label: 'Authors', value: usersData.filter(u => u.role === 'author').length, color: 'var(--color-gold)', dim: 'var(--color-gold-dim)' },
+          { label: 'Total Users', value: loading ? '…' : usersData.length, color: 'var(--color-blue)', dim: 'var(--color-blue-dim)' },
+          { label: 'Active', value: loading ? '…' : usersData.filter(u => u.isActive).length, color: 'var(--color-green)', dim: 'var(--color-green-dim)' },
+          { label: 'Suspended', value: loading ? '…' : usersData.filter(u => !u.isActive).length, color: 'var(--color-red)', dim: 'var(--color-red-dim)' },
+          { label: 'Authors', value: loading ? '…' : usersData.filter(u => u.role === 'AUTHOR').length, color: 'var(--color-gold)', dim: 'var(--color-gold-dim)' },
         ].map(s => (
           <div key={s.label} className="stat-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, flexShrink: 0, boxShadow: `0 0 8px ${s.color}` }} />
@@ -100,7 +155,7 @@ export default function UsersPage() {
         </div>
         <div className="search-box" style={{ flex: 1, minWidth: 200 }}>
           <Search />
-          <input className="search-input" placeholder="Search name or email…"
+          <input className="search-input" placeholder="Search name, username or email…"
             value={search} onChange={e => setSearch(e.target.value)} id="users-search" />
         </div>
       </div>
@@ -108,7 +163,11 @@ export default function UsersPage() {
       {/* Table */}
       <div className="section-card animate-fade-in">
         <div className="table-wrapper" style={{ border: 'none' }}>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Loading users…
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="empty-state"><Search size={40} /><p>No users found.</p></div>
           ) : (
             <table>
@@ -117,42 +176,45 @@ export default function UsersPage() {
                   <th>User</th>
                   <th>Role</th>
                   <th>Status</th>
-                  <th>Country</th>
-                  <th>Books</th>
+                  <th>Purchases</th>
                   <th>Total Spent</th>
                   <th>Joined</th>
-                  <th>Last Active</th>
+                  <th>Email Verified</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((user, i) => (
-                  <tr key={user.id}>
+                  <tr key={user.id} style={{ opacity: mutatingId === user.id ? 0.5 : 1, transition: 'opacity 0.2s' }}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div
-                          className={`avatar avatar-md avatar-${avatarColors[i % avatarColors.length]}`}
-                        >
-                          {user.name[0].toUpperCase()}
+                        <div className={`avatar avatar-md avatar-${avatarColors[i % avatarColors.length]}`}>
+                          {(user.fullName ?? user.username ?? '?')[0].toUpperCase()}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem' }}>{user.name}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem' }}>{user.fullName ?? user.username}</div>
                           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{user.email}</div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>@{user.username}</div>
                         </div>
                       </div>
                     </td>
-                    <td><span className={`badge badge-${user.role === 'admin' ? 'admin' : user.role === 'author' ? 'featured' : 'active'}`}>{user.role}</span></td>
-                    <td><span className={`badge badge-${user.status}`}>{user.status}</span></td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>{user.country}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{user.booksOwned}</td>
+                    <td><span className={`badge ${getRoleBadge(user.role)}`}>{user.role}</span></td>
+                    <td>
+                      <span className={`badge badge-${user.isActive ? 'approved' : 'rejected'}`}>
+                        {user.isActive ? 'Active' : 'Suspended'}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{user.purchaseCount}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-gold)', fontWeight: 600 }}>
                       {user.totalSpent > 0 ? `₹${user.totalSpent.toLocaleString('en-IN')}` : '—'}
                     </td>
                     <td style={{ color: 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                      {format(new Date(user.joinedAt), 'MMM d, yyyy')}
+                      {format(new Date(user.createdAt), 'MMM d, yyyy')}
                     </td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                      {formatDistanceToNow(new Date(user.lastActive), { addSuffix: true })}
+                    <td>
+                      <span style={{ fontSize: '0.75rem', color: user.isEmailVerified ? 'var(--color-green)' : 'var(--text-muted)' }}>
+                        {user.isEmailVerified ? '✓ Verified' : '✗ Unverified'}
+                      </span>
                     </td>
                     <td>
                       <div className="dropdown" style={{ position: 'relative' }}>
@@ -165,31 +227,29 @@ export default function UsersPage() {
                             <div className="dropdown-item" onClick={() => { setViewUser(user); setOpenMenuId(null); }}>
                               <Eye size={14} /> View Profile
                             </div>
-                            <div className="dropdown-item"><Mail size={14} /> Send Email</div>
-                            <div className="dropdown-item"><Activity size={14} /> View Activity</div>
+                            <div className="dropdown-item">
+                              <Mail size={14} /> Send Email
+                            </div>
                             <div className="dropdown-divider" />
-                            {user.role !== 'admin' && (
-                              <div className="dropdown-item" onClick={() => changeRole(user.id, 'admin')}>
-                                <UserCheck size={14} /> Make Admin
+                            {user.role !== 'ADMIN' && (
+                              <div className="dropdown-item" onClick={() => changeRole(user, 'ADMIN')}>
+                                <Shield size={14} /> Make Admin
                               </div>
                             )}
-                            {user.role === 'user' && (
-                              <div className="dropdown-item" onClick={() => changeRole(user.id, 'author')}>
+                            {user.role === 'USER' && (
+                              <div className="dropdown-item" onClick={() => changeRole(user, 'AUTHOR')}>
                                 <UserCheck size={14} /> Make Author
                               </div>
                             )}
-                            {user.role !== 'user' && (
-                              <div className="dropdown-item" onClick={() => changeRole(user.id, 'user')}>
+                            {user.role !== 'USER' && (
+                              <div className="dropdown-item" onClick={() => changeRole(user, 'USER')}>
                                 <UserCheck size={14} /> Demote to Reader
                               </div>
                             )}
                             <div className="dropdown-divider" />
-                            <div className="dropdown-item danger" onClick={() => toggleSuspend(user.id)}>
-                              <ShieldBan size={14} /> {user.status === 'active' ? 'Suspend' : 'Reactivate'}
+                            <div className="dropdown-item danger" onClick={() => toggleSuspend(user)}>
+                              <ShieldBan size={14} /> {user.isActive ? 'Suspend' : 'Reactivate'}
                             </div>
-                            {user.role !== 'admin' && (
-                              <div className="dropdown-item danger"><Trash2 size={14} /> Delete Account</div>
-                            )}
                           </div>
                         )}
                       </div>
@@ -199,11 +259,6 @@ export default function UsersPage() {
               </tbody>
             </table>
           )}
-        </div>
-        <div className="pagination">
-          <button className="page-btn" disabled>←</button>
-          <button className="page-btn active">1</button>
-          <button className="page-btn">→</button>
         </div>
       </div>
 
@@ -217,35 +272,49 @@ export default function UsersPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
               <div className="avatar avatar-lg avatar-gold" style={{ width: 56, height: 56, fontSize: '1.3rem' }}>
-                {viewUser.name[0]}
+                {(viewUser.fullName ?? viewUser.username ?? '?')[0]}
               </div>
               <div>
-                <h2 style={{ fontSize: '1.15rem' }}>{viewUser.name}</h2>
+                <h2 style={{ fontSize: '1.15rem' }}>{viewUser.fullName}</h2>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>@{viewUser.username}</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{viewUser.email}</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  <span className={`badge badge-${viewUser.role === 'admin' ? 'admin' : viewUser.role === 'author' ? 'featured' : 'active'}`}>{viewUser.role}</span>
-                  <span className={`badge badge-${viewUser.status}`}>{viewUser.status}</span>
+                  <span className={`badge ${getRoleBadge(viewUser.role)}`}>{viewUser.role}</span>
+                  <span className={`badge badge-${viewUser.isActive ? 'approved' : 'rejected'}`}>
+                    {viewUser.isActive ? 'Active' : 'Suspended'}
+                  </span>
+                  {viewUser.isEmailVerified && <span className="badge badge-approved">Email Verified</span>}
                 </div>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {[
-                { label: 'Country', value: viewUser.country },
-                { label: 'Books Owned', value: viewUser.booksOwned },
+                { label: 'Purchases', value: viewUser.purchaseCount },
                 { label: 'Total Spent', value: `₹${viewUser.totalSpent.toLocaleString('en-IN')}` },
-                { label: 'Joined', value: format(new Date(viewUser.joinedAt), 'PPP') },
-                { label: 'Last Active', value: formatDistanceToNow(new Date(viewUser.lastActive), { addSuffix: true }) },
-                { label: 'User ID', value: viewUser.id },
+                { label: 'Followers', value: viewUser.followersCount },
+                { label: 'Following', value: viewUser.followingCount },
+                { label: 'Joined', value: format(new Date(viewUser.createdAt), 'PPP') },
+                { label: 'User ID', value: viewUser.id.slice(0, 16) + '…' },
               ].map(item => (
                 <div key={item.label} style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 2 }}>{item.label}</div>
-                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: typeof item.value === 'string' && item.value.startsWith('₹') ? 'var(--font-mono)' : undefined }}>{item.value}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.value}</div>
                 </div>
               ))}
             </div>
+            {viewUser.bio && (
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>Bio</div>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{viewUser.bio}</p>
+              </div>
+            )}
             <div className="modal-footer">
-              <button className="btn btn-danger btn-sm" onClick={() => { toggleSuspend(viewUser.id); setViewUser(null); }}>
-                <ShieldBan size={14} /> {viewUser.status === 'active' ? 'Suspend' : 'Reactivate'}
+              <button
+                className="btn btn-danger btn-sm"
+                disabled={mutatingId === viewUser.id}
+                onClick={() => toggleSuspend(viewUser)}
+              >
+                <ShieldBan size={14} /> {viewUser.isActive ? 'Suspend' : 'Reactivate'}
               </button>
               <button className="btn btn-secondary" onClick={() => setViewUser(null)}>Close</button>
             </div>

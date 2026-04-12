@@ -1,10 +1,13 @@
+import { useState, useEffect, useCallback } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { revenueChartData, genreData, mockBooks, mockUsers, mockOrders } from '../../store/mockData';
 import { TrendingUp, Users, BookOpen, ShoppingCart } from 'lucide-react';
+import { fetchDashboardStats, type DashboardStats } from '../../services/analytics.service';
+import { useToast } from '../../components/layout/AdminLayout';
 
+// Mock chart data for things not natively aggregated in Postgres yet
 const weeklyUsers = [
   { day: 'Mon', new: 3, returning: 18 },
   { day: 'Tue', new: 5, returning: 22 },
@@ -22,6 +25,23 @@ const monthlyRevenue = [
   { month: 'Apr', revenue: 103520, current: true },
 ];
 
+const revenueChartData = [
+  { date: 'Mon', revenue: 1250, orders: 8 },
+  { date: 'Tue', revenue: 2100, orders: 15 },
+  { date: 'Wed', revenue: 1800, orders: 12 },
+  { date: 'Thu', revenue: 3400, orders: 24 },
+  { date: 'Fri', revenue: 4200, orders: 32 },
+  { date: 'Sat', revenue: 5100, orders: 40 },
+  { date: 'Sun', revenue: 3800, orders: 28 },
+];
+
+const genreData = [
+  { name: 'Fiction', value: 45, color: 'var(--color-blue)' },
+  { name: 'Non-Fiction', value: 30, color: 'var(--color-green)' },
+  { name: 'Poetry', value: 15, color: 'var(--color-purple)' },
+  { name: 'Biography', value: 10, color: 'var(--color-gold)' },
+];
+
 function CustomTooltipRevenue({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
@@ -37,11 +57,31 @@ function CustomTooltipRevenue({ active, payload, label }: any) {
 }
 
 export default function AnalyticsPage() {
-  const totalRevenue = mockBooks.reduce((s, b) => s + b.revenue, 0);
-  const avgOrderValue = mockOrders.filter(o => o.status === 'completed').reduce((s, o) => s + o.amount, 0) /
-    Math.max(1, mockOrders.filter(o => o.status === 'completed').length);
-  const activeUsers = mockUsers.filter(u => u.status === 'active').length;
-  const conversionRate = ((mockOrders.filter(o => o.status === 'completed').length / mockUsers.length) * 100).toFixed(1);
+  const { addToast } = useToast();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await fetchDashboardStats();
+      setStats(data);
+    } catch (e: any) {
+      addToast(e.message ?? 'Failed to load analytics', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const totalRev = stats?.totalRevenue ?? 0;
+  const avgOrder = stats?.totalPurchases ? (totalRev / stats.totalPurchases) : 0;
+  const convRate = stats?.totalUsers ? ((stats.totalPurchases / stats.totalUsers) * 100).toFixed(1) : '0';
+
+  if (loading) {
+    return <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-muted)' }}>Loading analytics…</div>;
+  }
 
   return (
     <div>
@@ -57,10 +97,10 @@ export default function AnalyticsPage() {
       {/* KPI Cards */}
       <div className="stats-grid animate-fade-in-up">
         {[
-          { label: 'Total Revenue', value: `₹${(totalRevenue / 1000).toFixed(1)}K`, sub: '↑ 23% from last month', icon: TrendingUp, color: 'var(--color-gold)', dim: 'var(--color-gold-dim)' },
-          { label: 'Avg. Order Value', value: `₹${avgOrderValue.toFixed(0)}`, sub: '↑ 4% from last month', icon: ShoppingCart, color: 'var(--color-green)', dim: 'var(--color-green-dim)' },
-          { label: 'Active Users', value: activeUsers, sub: '↑ 3 new this week', icon: Users, color: 'var(--color-blue)', dim: 'var(--color-blue-dim)' },
-          { label: 'Conversion Rate', value: `${conversionRate}%`, sub: 'Users → Buyers', icon: BookOpen, color: 'var(--color-purple)', dim: 'var(--color-purple-dim)' },
+          { label: 'Total Revenue', value: `₹${(totalRev / 1000).toFixed(1)}K`, sub: '↑ 23% from last month', icon: TrendingUp, color: 'var(--color-gold)', dim: 'var(--color-gold-dim)' },
+          { label: 'Avg. Order Value', value: `₹${avgOrder.toFixed(0)}`, sub: '↑ 4% from last month', icon: ShoppingCart, color: 'var(--color-green)', dim: 'var(--color-green-dim)' },
+          { label: 'Active Users', value: stats?.activeUsers ?? 0, sub: '↑ 3 new this week', icon: Users, color: 'var(--color-blue)', dim: 'var(--color-blue-dim)' },
+          { label: 'Conversion Rate', value: `${convRate}%`, sub: 'Users → Buyers', icon: BookOpen, color: 'var(--color-purple)', dim: 'var(--color-purple-dim)' },
         ].map((s, i) => {
           const Icon = s.icon;
           return (
@@ -98,134 +138,81 @@ export default function AnalyticsPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                <XAxis dataKey="day" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} dy={8} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
                 <Tooltip content={<CustomTooltipRevenue />} />
-                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="var(--color-gold)" strokeWidth={2.5} fill="url(#revGrad2)" />
+                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="var(--color-gold)" strokeWidth={2} fillOpacity={1} fill="url(#revGrad2)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Genre Distribution Pie */}
         <div className="section-card">
           <div className="section-card-header">
-            <span className="section-card-title">Genre Distribution</span>
+            <span className="section-card-title">User Signups</span>
+          </div>
+          <div className="section-card-body" style={{ paddingTop: 0 }}>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={weeklyUsers} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} dy={8} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                <Tooltip cursor={{ fill: 'var(--bg-elevated)' }} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '0.8rem', paddingTop: 10 }} />
+                <Bar dataKey="new" name="New Users" stackId="a" fill="var(--color-blue)" radius={[0, 0, 4, 4]} />
+                <Bar dataKey="returning" name="Returning Users" stackId="a" fill="rgba(88, 166, 255, 0.2)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="content-grid animate-fade-in-up stagger-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="section-card">
+          <div className="section-card-header">
+            <span className="section-card-title">Sales by Genre</span>
+          </div>
+          <div className="section-card-body" style={{ paddingTop: 0, display: 'flex', alignItems: 'center' }}>
+            <ResponsiveContainer width="50%" height={200}>
+              <PieChart>
+                <Pie data={genreData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none">
+                  {genreData.map((e, i) => <Cell key={`cell-${i}`} fill={e.color} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ flex: 1, paddingLeft: 'var(--space-md)' }}>
+              {genreData.map(g => (
+                <div key={g.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: g.color }} />
+                    <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{g.name}</span>
+                  </div>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{g.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="section-card">
+          <div className="section-card-header">
+            <span className="section-card-title">Monthly Revenue Trend</span>
           </div>
           <div className="section-card-body" style={{ paddingTop: 0 }}>
             <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={genreData} dataKey="count" nameKey="genre" cx="50%" cy="50%" outerRadius={80} innerRadius={40} paddingAngle={3}>
-                  {genreData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+              <BarChart data={monthlyRevenue} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} dy={8} />
+                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }} formatter={(v: any) => `₹${Number(v).toLocaleString()}`} />
+                <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                  {monthlyRevenue.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.current ? 'var(--color-gold)' : 'var(--color-blue-dim)'} />
                   ))}
-                </Pie>
-                <Tooltip formatter={(val: number, name: string) => [`${val} books`, name]} contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8 }} />
-                <Legend formatter={(value) => <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{value}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* User Growth Bar + Monthly Revenue */}
-      <div className="content-grid animate-fade-in-up stagger-4" style={{ marginBottom: 'var(--space-md)' }}>
-        {/* User Activity This Week */}
-        <div className="section-card">
-          <div className="section-card-header">
-            <span className="section-card-title">User Activity — This Week</span>
-          </div>
-          <div className="section-card-body" style={{ paddingTop: 0 }}>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={weeklyUsers} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                <XAxis dataKey="day" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltipRevenue />} />
-                <Bar dataKey="returning" name="Returning" fill="var(--color-blue)" radius={[4, 4, 0, 0]} opacity={0.7} />
-                <Bar dataKey="new" name="New" fill="var(--color-gold)" radius={[4, 4, 0, 0]} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
-
-        {/* Monthly Revenue Trend */}
-        <div className="section-card">
-          <div className="section-card-header">
-            <span className="section-card-title">Monthly Revenue</span>
-          </div>
-          <div className="section-card-body" style={{ paddingTop: 0 }}>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={monthlyRevenue} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                <XAxis dataKey="month" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltipRevenue />} formatter={(v: number) => `₹${v.toLocaleString('en-IN')}`} />
-                <Bar dataKey="revenue" name="Revenue" radius={[4, 4, 0, 0]}
-                  fill="var(--color-green)" opacity={0.85} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Top Books Table */}
-      <div className="section-card animate-fade-in-up stagger-5">
-        <div className="section-card-header">
-          <span className="section-card-title">Top Performing Books</span>
-        </div>
-        <div className="table-wrapper" style={{ border: 'none' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Book</th>
-                <th>Genre</th>
-                <th>Sales</th>
-                <th>Revenue</th>
-                <th>Rating</th>
-                <th>Market Share</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...mockBooks]
-                .filter(b => b.status === 'approved')
-                .sort((a, b) => b.revenue - a.revenue)
-                .slice(0, 6)
-                .map((book, i) => {
-                  const maxRevenue = Math.max(...mockBooks.map(b => b.revenue));
-                  const share = ((book.revenue / totalRevenue) * 100).toFixed(1);
-                  return (
-                    <tr key={book.id}>
-                      <td style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', width: 40 }}>{i + 1}</td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 28, height: 38, borderRadius: '2px 5px 5px 2px', background: book.coverColor, flexShrink: 0, boxShadow: '2px 2px 6px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ color: '#fff', fontSize: '0.42rem', fontWeight: 800 }}>{book.title.slice(0, 2)}</span>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem' }}>{book.title}</div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{book.author}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>{book.genre}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{book.sales.toLocaleString()}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-gold)', fontWeight: 700 }}>₹{book.revenue.toLocaleString('en-IN')}</td>
-                      <td style={{ color: 'var(--color-gold)', fontWeight: 600, fontSize: '0.85rem' }}>{'★'.repeat(Math.round(book.rating))} {book.rating}</td>
-                      <td style={{ minWidth: 120 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div className="progress-bar" style={{ flex: 1 }}>
-                            <div className="progress-fill" style={{ width: `${(book.revenue / maxRevenue) * 100}%` }} />
-                          </div>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{share}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

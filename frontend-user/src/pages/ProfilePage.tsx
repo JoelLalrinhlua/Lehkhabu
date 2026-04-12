@@ -3,34 +3,22 @@ import { useAuthStore } from '../store/authStore';
 import { useUserStore } from '../store/userStore';
 import { useBooksStore } from '../store/booksStore';
 import { signOut } from '../services/auth.service';
-import { uploadAvatar, updateUserProfile } from '../services/profile.service';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import './ProfilePage.css';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { profile, loadProfile } = useAuthStore();
+  const { profile } = useAuthStore();
   const { role, applicationStatus } = useUserStore();
   const { shelf, purchases } = useBooksStore();
 
   const isAuthor = profile?.role === 'AUTHOR' || role === 'author';
 
-  // Shelf counts from real data
+  // Shelf counts
   const readCount = shelf.filter((s) => s.shelf === 'READ').length;
   const readingCount = shelf.filter((s) => s.shelf === 'READING').length;
   const wantCount = shelf.filter((s) => s.shelf === 'WANT_TO_READ').length;
   const purchaseCount = purchases.length;
-
-  // Avatar upload state
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  // Edit mode state
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editBio, setEditBio] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [signingOut, setSigningOut] = useState(false);
 
@@ -45,347 +33,261 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAvatarClick = () => {
-    if (!uploading) fileInputRef.current?.click();
-  };
-
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !profile) return;
-
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const avatarUrl = await uploadAvatar(profile.id, file);
-      await updateUserProfile(profile.id, { avatar_url: avatarUrl });
-      // Reload profile to reflect new avatar
-      if (profile.supabase_uid) await loadProfile(profile.supabase_uid);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-      // Reset input so same file can be selected again
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const startEdit = () => {
-    setEditName(profile?.full_name || '');
-    setEditBio(profile?.bio || '');
-    setSaveError(null);
-    setEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setSaveError(null);
-  };
-
-  const saveEdit = async () => {
+  const handleShare = async () => {
     if (!profile) return;
-    if (!editName.trim()) {
-      setSaveError('Name cannot be empty.');
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await updateUserProfile(profile.id, {
-        full_name: editName.trim(),
-        bio: editBio.trim() || undefined,
-      });
-      if (profile.supabase_uid) await loadProfile(profile.supabase_uid);
-      setEditing(false);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Could not save changes.');
-    } finally {
-      setSaving(false);
+    const url = `${window.location.origin}/u/${profile.username}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${profile.full_name || profile.username}'s Lehkhabu Profile`,
+          url: url
+        });
+      } catch (err) {
+        // Handle cancel seamlessly
+      }
+    } else {
+      navigator.clipboard.writeText(url);
+      alert('Profile link copied to clipboard!');
     }
   };
 
   if (!profile) {
     return (
-      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <div className="page auth-loading-wrapper">
         <div className="auth-init-spinner" />
       </div>
     );
   }
 
-  const memberSince = new Date(profile.created_at).toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'long',
-  });
-
   const daysLeft = Math.ceil(
     (new Date(new Date().getFullYear(), 11, 31).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   );
+  
+  const readingGoal = 12; // Example static goal, could be dynamic
 
   return (
-    <div className="page">
+    <div className="page modern-profile-page">
+      
+      {/* ── Modern Profile Header ────────────────────────────── */}
+      <div className="modern-profile-header">
+        <div 
+          className="profile-header-bg"
+          style={profile.profile_bg_url ? {
+            backgroundImage: `url(${profile.profile_bg_url})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          } : undefined}
+        >
+          {!profile.profile_bg_url && (
+            <>
+              <div className="header-blob bg-blob-1"></div>
+              <div className="header-blob bg-blob-2"></div>
+            </>
+          )}
 
-      {/* ── Profile Header ───────────────────────────────────── */}
-      <div className="profile-header">
-        {/* Decorative book stack */}
-        <div className="profile-book-stack">
-          <div className="book-stack-item" style={{ background: 'linear-gradient(135deg, #E8A87C, #D4632E)' }} />
-          <div className="book-stack-item" style={{ background: 'linear-gradient(135deg, #85C1E9, #2E86C1)' }} />
-          <div className="book-stack-item" style={{ background: 'linear-gradient(135deg, #A9DFBF, #1E8449)' }} />
-          <div className="book-stack-item" style={{ background: 'linear-gradient(135deg, #F9E79F, #D4AC0D)' }} />
-          <div className="book-stack-item" style={{ background: 'linear-gradient(135deg, #D7BDE2, #7D3C98)' }} />
+          {/* Share Button Overlay */}
+          <button className="cover-share-btn" onClick={handleShare} aria-label="Share Profile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+              <polyline points="16 6 12 2 8 6"></polyline>
+              <line x1="12" y1="2" x2="12" y2="15"></line>
+            </svg>
+          </button>
         </div>
-
-        {/* Avatar with upload */}
-        <div className="profile-avatar-wrap" onClick={handleAvatarClick} title="Change profile picture" role="button" tabIndex={0} aria-label="Change profile picture">
-          {uploading && (
-            <div className="profile-avatar-overlay">
-              <div className="auth-init-spinner" style={{ width: 24, height: 24 }} />
-            </div>
-          )}
-          {profile.avatar_url ? (
-            <img
-              src={profile.avatar_url}
-              alt={profile.full_name}
-              className="profile-avatar profile-avatar-img"
-            />
-          ) : (
-            <div className="profile-avatar">
-              {profile.full_name?.[0]?.toUpperCase() || profile.username?.[0]?.toUpperCase() || '?'}
-            </div>
-          )}
-          {!uploading && (
-            <div className="profile-avatar-edit-badge" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="12" height="12">
-                <path d="M12 20h9" strokeLinecap="round" />
-                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          )}
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={handleAvatarChange}
-          aria-label="Upload profile picture"
-        />
-        {uploadError && <div className="profile-upload-error">{uploadError}</div>}
-
-        {/* Name / handle */}
-        {!editing ? (
-          <>
+        
+        <div className="profile-header-content">
+          <div className="profile-header-avatar">
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt={profile.full_name} className="avatar-img" />
+            ) : (
+              <div className="avatar-placeholder">
+                {profile.full_name?.[0]?.toUpperCase() || profile.username?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            {isAuthor && <div className="avatar-author-badge">✍️</div>}
+          </div>
+          
+          <div className="profile-header-info">
             <h1 className="profile-name">{profile.full_name || profile.username}</h1>
             <div className="profile-handle">@{profile.username}</div>
             {profile.bio && <p className="profile-bio">{profile.bio}</p>}
-            <button className="profile-edit-btn" onClick={startEdit}>Edit Profile</button>
-          </>
-        ) : (
-          <div className="profile-edit-form">
-            <input
-              className="profile-edit-input"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              placeholder="Full name"
-              maxLength={80}
-            />
-            <textarea
-              className="profile-edit-textarea"
-              value={editBio}
-              onChange={(e) => setEditBio(e.target.value)}
-              placeholder="Bio (optional)"
-              rows={3}
-              maxLength={300}
-            />
-            {saveError && <div className="profile-upload-error">{saveError}</div>}
-            <div className="profile-edit-actions">
-              <button className="profile-edit-cancel" onClick={cancelEdit} disabled={saving}>Cancel</button>
-              <button className="profile-edit-save" onClick={saveEdit} disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
           </div>
-        )}
-
-        {isAuthor && (
-          <div className="profile-role-badge">✍️ Author</div>
-        )}
-      </div>
-
-      {/* ── Stats ────────────────────────────────────────────── */}
-      <div className="profile-stats">
-        <div className="stat-item">
-          <div className="stat-number">{readCount}</div>
-          <div className="stat-label">Read</div>
-        </div>
-        <div className="stat-item stat-item-divider">
-          <div className="stat-number">{readingCount}</div>
-          <div className="stat-label">Reading</div>
-        </div>
-        <div className="stat-item stat-item-divider">
-          <div className="stat-number">{wantCount}</div>
-          <div className="stat-label">Want to Read</div>
-        </div>
-        <div className="stat-item stat-item-divider">
-          <div className="stat-number">{purchaseCount}</div>
-          <div className="stat-label">Purchased</div>
         </div>
       </div>
 
-      {/* ── Bookshelves ──────────────────────────────────────── */}
-      <div className="profile-section">
-        <h2 className="profile-section-title">Your Bookshelves</h2>
-        <div className="bookshelves-grid">
-          <button className="bookshelf-card bookshelf-read" onClick={() => navigate('/library')}>
-            <div className="bookshelf-icon">📗</div>
-            <div className="bookshelf-name">Read</div>
-            <div className="bookshelf-count">({readCount})</div>
-          </button>
-          <button className="bookshelf-card bookshelf-want" onClick={() => navigate('/explore')}>
-            <div className="bookshelf-icon">🔖</div>
-            <div className="bookshelf-name">Want to Read</div>
-            <div className="bookshelf-count">({wantCount})</div>
-          </button>
-          <button className="bookshelf-card bookshelf-reading" onClick={() => navigate('/library')}>
-            <div className="bookshelf-icon">📖</div>
-            <div className="bookshelf-name">Currently Reading</div>
-            <div className="bookshelf-count">({readingCount})</div>
-          </button>
+      {/* ── Stats Grid ───────────────────────────────────────── */}
+      <div className="profile-stats-grid">
+        <div className="stat-card" onClick={() => navigate('/library')}>
+          <div className="stat-icon book-read-icon">📗</div>
+          <div className="stat-info">
+            <div className="stat-number">{readCount}</div>
+            <div className="stat-label">Read</div>
+          </div>
+        </div>
+        <div className="stat-card" onClick={() => navigate('/library')}>
+          <div className="stat-icon book-reading-icon">📖</div>
+          <div className="stat-info">
+            <div className="stat-number">{readingCount}</div>
+            <div className="stat-label">Reading</div>
+          </div>
+        </div>
+        <div className="stat-card" onClick={() => navigate('/library')}>
+          <div className="stat-icon book-want-icon">🔖</div>
+          <div className="stat-info">
+            <div className="stat-number">{wantCount}</div>
+            <div className="stat-label">Want to Read</div>
+          </div>
+        </div>
+        <div className="stat-card" onClick={() => navigate('/library')}>
+          <div className="stat-icon book-purchased-icon">🛍️</div>
+          <div className="stat-info">
+            <div className="stat-number">{purchaseCount}</div>
+            <div className="stat-label">Purchased</div>
+          </div>
         </div>
       </div>
 
-      {/* ── Reading Challenge ─────────────────────────────────── */}
-      <div className="profile-section">
-        <div className="challenge-card">
-          <h2 className="challenge-title">{new Date().getFullYear()} Reading Challenge</h2>
-          <div className="challenge-content">
-            <div className="challenge-icon">📚</div>
-            <div className="challenge-text">
-              Set a reading goal for this year and track your progress!
-            </div>
-            <div className="challenge-progress">
-              <div className="challenge-bar">
-                <div
-                  className="challenge-fill"
-                  style={{ width: `${Math.min(100, (readCount / 12) * 100)}%` }}
-                />
-              </div>
-              <div className="challenge-stats">
-                <span>{readCount} of 12 books</span>
-                <span>{daysLeft} days left</span>
+      <div className="profile-sections-wrapper">
+        
+        {/* ── Application / Author Card ──────────────────────── */}
+        <div className="profile-section">
+          {isAuthor ? (
+            <div className="action-card action-author" onClick={() => navigate('/author')}>
+              <div className="action-card-bg"></div>
+              <div className="action-card-content">
+                <div className="action-card-icon">✍️</div>
+                <div className="action-card-text">
+                  <h3>Author Dashboard</h3>
+                  <p>Manage your published books and track lifetime earnings</p>
+                </div>
+                <div className="action-card-arrow">→</div>
               </div>
             </div>
-            <button className="challenge-edit" onClick={() => {}}>
-              {readCount >= 12 ? '🎉 Goal Reached!' : 'Set Reading Goal'}
+          ) : applicationStatus === 'pending' ? (
+             <div className="action-card action-pending" onClick={() => navigate('/apply')}>
+               <div className="action-card-content">
+                 <div className="action-card-icon">⏳</div>
+                 <div className="action-card-text">
+                   <h3>Application Pending</h3>
+                   <p>Our team is currently reviewing your author submission</p>
+                 </div>
+                 <div className="action-card-arrow">→</div>
+               </div>
+             </div>
+          ) : applicationStatus === 'rejected' ? (
+             <div className="action-card action-rejected" onClick={() => navigate('/apply')}>
+               <div className="action-card-content">
+                 <div className="action-card-icon">❌</div>
+                 <div className="action-card-text">
+                   <h3>Application Not Approved</h3>
+                   <p>Tap here to revise your details and reapply to become an author</p>
+                 </div>
+                 <div className="action-card-arrow">→</div>
+               </div>
+             </div>
+          ) : (
+             <div className="action-card action-apply" onClick={() => navigate('/apply')}>
+               <div className="action-card-content">
+                 <div className="action-card-icon">🌟</div>
+                 <div className="action-card-text">
+                   <h3>Become an Author</h3>
+                   <p>Share your stories with the exclusive Mizo reader community</p>
+                 </div>
+                 <div className="action-card-arrow">→</div>
+               </div>
+             </div>
+          )}
+        </div>
+
+        {/* ── Settings Menu ──────────────────────────────────── */}
+        <div className="profile-menu-group">
+          <h2 className="menu-group-title">Settings</h2>
+          <div className="menu-list">
+            
+            <button className="menu-item" onClick={() => navigate('/profile/settings/profile')}>
+              <div className="menu-item-icon profile-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
+              <div className="menu-item-content">
+                <div className="menu-item-title">Profile Settings</div>
+                <div className="menu-item-sub">Change name, bio, and avatar</div>
+              </div>
+              <div className="menu-item-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
             </button>
+
+            <button className="menu-item" onClick={() => navigate('/profile/settings/account')}>
+              <div className="menu-item-icon account-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </div>
+              <div className="menu-item-content">
+                <div className="menu-item-title">Account Settings</div>
+                <div className="menu-item-sub">Email, username, and security</div>
+              </div>
+              <div className="menu-item-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            </button>
+
           </div>
         </div>
-      </div>
-
-      {/* ── Author / Application section ─────────────────────── */}
-      <div className="profile-section">
-        {isAuthor ? (
-          <div
-            className="author-promo-card author-promo-approved"
-            onClick={() => navigate('/author')}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="author-promo-icon">✍️</div>
-            <div className="author-promo-body">
-              <div className="author-promo-title">Author Dashboard</div>
-              <div className="author-promo-sub">Manage your books and track earnings</div>
+        
+        {/* ── Reading Challenge ──────────────────────────────── */}
+        <div className="profile-menu-group">
+          <h2 className="menu-group-title">Activity</h2>
+          <div className="menu-list">
+            
+            <div className="reading-challenge-widget">
+              <div className="rc-header">
+                <div className="rc-title-wrap">
+                  <span className="rc-icon">🎯</span>
+                  <div className="rc-title">
+                    <h4>{new Date().getFullYear()} Reading Challenge</h4>
+                    <p>{readCount} of {readingGoal} books read</p>
+                  </div>
+                </div>
+                <div className="rc-days-left">{daysLeft} days left</div>
+              </div>
+              <div className="rc-progress-bar">
+                <div 
+                  className="rc-progress-fill" 
+                  style={{ width: `${Math.min(100, (readCount / readingGoal) * 100)}%` }}
+                ></div>
+              </div>
             </div>
-            <div className="author-promo-arrow">→</div>
-          </div>
-        ) : applicationStatus === 'pending' ? (
-          <div
-            className="author-promo-card author-promo-pending"
-            onClick={() => navigate('/apply')}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="author-promo-icon">⏳</div>
-            <div className="author-promo-body">
-              <div className="author-promo-title">Application Pending</div>
-              <div className="author-promo-sub">Our team is reviewing your submission</div>
-            </div>
-            <div className="author-promo-arrow">→</div>
-          </div>
-        ) : applicationStatus === 'rejected' ? (
-          <div
-            className="author-promo-card author-promo-rejected"
-            onClick={() => navigate('/apply')}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="author-promo-icon">❌</div>
-            <div className="author-promo-body">
-              <div className="author-promo-title">Application Not Approved</div>
-              <div className="author-promo-sub">Tap to revise and reapply</div>
-            </div>
-            <div className="author-promo-arrow">→</div>
-          </div>
-        ) : (
-          <div
-            className="author-promo-card author-promo-default"
-            onClick={() => navigate('/apply')}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="author-promo-icon">✍️</div>
-            <div className="author-promo-body">
-              <div className="author-promo-title">Become an Author</div>
-              <div className="author-promo-sub">Share your stories with the Mizo community</div>
-            </div>
-            <div className="author-promo-arrow">→</div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Account section ──────────────────────────────────── */}
-      <div className="profile-section">
-        <h2 className="profile-section-title">Account</h2>
-        <div className="profile-account-card">
-          <div className="profile-account-row">
-            <span className="profile-account-label">Email</span>
-            <span className="profile-account-value">{profile.email}</span>
-          </div>
-          <div className="profile-account-row">
-            <span className="profile-account-label">Username</span>
-            <span className="profile-account-value">@{profile.username}</span>
-          </div>
-          <div className="profile-account-row">
-            <span className="profile-account-label">Member since</span>
-            <span className="profile-account-value">{memberSince}</span>
-          </div>
-          <div className="profile-account-row">
-            <span className="profile-account-label">Email verified</span>
-            <span className="profile-account-value" style={{ color: profile.is_email_verified ? 'var(--color-success)' : 'var(--color-gray-500)' }}>
-              {profile.is_email_verified ? '✓ Verified' : 'Not verified'}
-            </span>
-          </div>
-          <div className="profile-account-row">
-            <span className="profile-account-label">Role</span>
-            <span className="profile-account-value">{profile.role}</span>
-          </div>
-          <div className="profile-account-row">
-            <span className="profile-account-label">Following</span>
-            <span className="profile-account-value">{profile.following_count}</span>
-          </div>
-          <div className="profile-account-row">
-            <span className="profile-account-label">Followers</span>
-            <span className="profile-account-value">{profile.followers_count}</span>
+            
           </div>
         </div>
 
-        <button
-          className="profile-signout-btn"
-          onClick={handleSignOut}
-          disabled={signingOut}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          {signingOut ? 'Signing out…' : 'Sign Out'}
-        </button>
+        {/* ── Sign Out ────────────────────────────────────────── */}
+        <div className="profile-signout-wrapper" style={{ marginTop: '24px', padding: '0 16px 32px' }}>
+          <button
+            className="settings-signout-btn"
+            style={{ width: '100%', padding: '14px', borderRadius: '12px', background: '#ececec', color: '#e74c3c', fontWeight: '600', border: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            {signingOut ? 'Signing out…' : 'Sign Out'}
+          </button>
+        </div>
+
       </div>
     </div>
   );

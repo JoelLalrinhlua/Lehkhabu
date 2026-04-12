@@ -1,102 +1,89 @@
 import { supabase } from '../lib/supabase';
 
-// ── Image Compression ────────────────────────────────────────────
-async function compressImage(file: File, maxWidth = 1920, quality = 0.85): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxWidth / img.width);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, w, h);
-
-      canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Compression failed'));
-        },
-        'image/webp',
-        quality
-      );
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load image'));
-    };
-
-    img.src = url;
-  });
+export interface AppSettings {
+  home_hero_text: string;
+  home_sub_text: string;
+  features_bg_image_url: string | null;
+  features_bg_overlay_opacity: string;
+  maintenance_mode: string;
+  allow_registrations: string;
+  platform_fee_percent: string;
+  featured_section_title: string;
+  new_books_highlight: string;
+  announcement_banner_active: string;
+  announcement_banner_text: string;
+  max_books_per_user: string;
+  default_currency: string;
+  platform_name: string;
 }
 
-// ── Features BG Upload ───────────────────────────────────────────
-export async function uploadFeaturesBg(file: File): Promise<string> {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Please select an image file (JPEG, PNG, or WebP).');
-  }
-  if (file.size > 20 * 1024 * 1024) {
-    throw new Error('Image must be smaller than 20MB.');
-  }
-
-  const compressed = await compressImage(file, 1920, 0.85);
-  const filePath = `features-bg/hero.webp`;
-
-  const { error: uploadErr } = await supabase.storage
-    .from('features-bg')
-    .upload(filePath, compressed, { contentType: 'image/webp', upsert: true });
-
-  if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
-
-  const { data } = supabase.storage.from('features-bg').getPublicUrl(filePath);
-  const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
-
-  // Save URL to app_settings table
-  const { error: settingsErr } = await supabase
-    .from('app_settings')
-    .upsert({ key: 'features_bg_image_url', value: publicUrl, updated_at: new Date().toISOString() });
-
-  if (settingsErr) throw new Error(`Failed to save setting: ${settingsErr.message}`);
-
-  return publicUrl;
+/** Get all app settings as a flat key-value object */
+export async function fetchSettings(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.from('app_settings').select('key, value');
+  if (error) throw error;
+  const obj: Record<string, string> = {};
+  (data ?? []).forEach((row: any) => { obj[row.key] = row.value ?? ''; });
+  return obj;
 }
 
-// ── Update App Setting ───────────────────────────────────────────
-export async function updateAppSetting(key: string, value: string): Promise<void> {
+/** Alias for UISettingsPage compatibility */
+export async function fetchAppSettings(): Promise<AppSettings> {
+  const raw = await fetchSettings();
+  return {
+    home_hero_text: raw['home_hero_text'] ?? 'Your Mizo Reading Universe',
+    home_sub_text: raw['home_sub_text'] ?? 'Discover books written by your favourite Mizo authors.',
+    features_bg_image_url: raw['features_bg_image_url'] ?? null,
+    features_bg_overlay_opacity: raw['features_bg_overlay_opacity'] ?? '0.55',
+    maintenance_mode: raw['maintenance_mode'] ?? 'false',
+    allow_registrations: raw['allow_registrations'] ?? 'true',
+    platform_fee_percent: raw['platform_fee_percent'] ?? '15',
+    featured_section_title: raw['featured_section_title'] ?? 'Featured Picks',
+    new_books_highlight: raw['new_books_highlight'] ?? 'true',
+    announcement_banner_active: raw['announcement_banner_active'] ?? 'false',
+    announcement_banner_text: raw['announcement_banner_text'] ?? '',
+    max_books_per_user: raw['max_books_per_user'] ?? '50',
+    default_currency: raw['default_currency'] ?? 'INR',
+    platform_name: raw['platform_name'] ?? 'Lehkhabu',
+  };
+}
+
+/** Update a single setting */
+export async function updateSetting(key: string, value: string) {
   const { error } = await supabase
     .from('app_settings')
-    .upsert({ key, value, updated_at: new Date().toISOString() });
-
-  if (error) throw new Error(error.message);
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  if (error) throw error;
 }
 
-// ── Fetch App Settings ───────────────────────────────────────────
-export interface AppSettings {
-  features_bg_image_url: string | null;
-  features_bg_overlay_opacity: number;
-}
-
-export async function fetchAppSettings(): Promise<AppSettings> {
-  const { data, error } = await supabase
+/** Update multiple settings at once */
+export async function updateSettings(settings: Record<string, string>) {
+  const rows = Object.entries(settings).map(([key, value]) => ({
+    key,
+    value,
+    updated_at: new Date().toISOString(),
+  }));
+  const { error } = await supabase
     .from('app_settings')
-    .select('key, value');
+    .upsert(rows, { onConflict: 'key' });
+  if (error) throw error;
+}
 
-  if (error) throw new Error(error.message);
+/** Upload a features background image to Supabase Storage */
+export async function uploadFeaturesBg(file: File): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const path = `features-bg/main.${ext}`;
 
-  const map: Record<string, string | null> = {};
-  (data ?? []).forEach((row: { key: string; value: string | null }) => {
-    map[row.key] = row.value;
-  });
+  const { error: uploadError } = await supabase.storage
+    .from('book-covers')
+    .upload(path, file, { upsert: true, contentType: file.type });
 
-  return {
-    features_bg_image_url: map.features_bg_image_url ?? null,
-    features_bg_overlay_opacity: parseFloat(map.features_bg_overlay_opacity ?? '0.55'),
-  };
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from('book-covers').getPublicUrl(path);
+  const publicUrl = data.publicUrl + `?t=${Date.now()}`;
+
+  // Save the URL to app_settings
+  await updateSetting('features_bg_image_url', publicUrl);
+
+  return publicUrl;
 }

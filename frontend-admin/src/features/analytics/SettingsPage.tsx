@@ -1,42 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Save, Key, Database, Mail, Globe, CreditCard, Shield, Lock, RefreshCw, Server } from 'lucide-react';
 import { useToast } from '../../components/layout/AdminLayout';
-
-interface PlatformConfig {
-  platformName: string;
-  platformEmail: string;
-  supportEmail: string;
-  appUrl: string;
-  apiUrl: string;
-  smtpHost: string;
-  smtpPort: string;
-  smtpUser: string;
-  razorpayMode: 'test' | 'live';
-  supabaseUrl: string;
-  geminiEnabled: boolean;
-  twoFactorEnabled: boolean;
-  sessionTimeoutMinutes: number;
-  ipRateLimitEnabled: boolean;
-  maxLoginAttempts: number;
-}
-
-const defaultConfig: PlatformConfig = {
-  platformName: 'Lehkhabu',
-  platformEmail: 'admin@lehkhabu.com',
-  supportEmail: 'support@lehkhabu.com',
-  appUrl: 'https://lehkhabu.com',
-  apiUrl: 'http://localhost:8000',
-  smtpHost: 'smtp.postmarkapp.com',
-  smtpPort: '587',
-  smtpUser: 'admin@lehkhabu.com',
-  razorpayMode: 'test',
-  supabaseUrl: 'https://thdltkblbodghicxfgdh.supabase.co',
-  geminiEnabled: false,
-  twoFactorEnabled: false,
-  sessionTimeoutMinutes: 10080,
-  ipRateLimitEnabled: true,
-  maxLoginAttempts: 5,
-};
+import { fetchSettings, updateSettings } from '../../services/settings.service';
 
 function SectionHead({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
@@ -72,7 +37,7 @@ function ConfigRow({ label, type = 'text', value, onChange, id, secret, placehol
         />
         {secret && (
           <button onClick={() => setShow(v => !v)}
-            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', display: 'flex' }}>
+            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', display: 'flex', background: 'transparent', border: 'none', cursor: 'pointer' }}>
             {show ? <Lock size={14} /> : <Key size={14} />}
           </button>
         )}
@@ -99,16 +64,62 @@ function ToggleRow({ label, description, value, onChange, id }: {
 
 export default function SettingsPage() {
   const { addToast } = useToast();
-  const [cfg, setCfg] = useState<PlatformConfig>(defaultConfig);
+  const [cfg, setCfg] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  function update<K extends keyof PlatformConfig>(key: K, value: PlatformConfig[K]) {
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchSettings();
+      setCfg(data);
+    } catch (e: any) {
+      addToast(e.message ?? 'Failed to load settings', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function update(key: string, value: string) {
     setCfg(prev => ({ ...prev, [key]: value }));
   }
 
-  function save() { addToast('Platform settings saved!', 'success'); }
-  function testSmtp() { addToast('SMTP test email sent to ' + cfg.platformEmail, 'info'); }
+  async function save() {
+    setSaving(true);
+    try {
+      await updateSettings(cfg);
+      addToast('Platform settings saved!', 'success');
+    } catch (e: any) {
+      addToast(e.message ?? 'Failed to save settings', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function getValue(key: string, defaultVal: string = '') {
+    return cfg[key] ?? defaultVal;
+  }
+
+  function getBoolean(key: string, defaultVal: boolean = false) {
+    const val = cfg[key];
+    if (val === 'true') return true;
+    if (val === 'false') return false;
+    return defaultVal;
+  }
+
+  function updateBoolean(key: string, value: boolean) {
+    update(key, value ? 'true' : 'false');
+  }
+
+  function testSmtp() { addToast('SMTP test email sent to ' + getValue('platformEmail', 'admin@lehkhabu.com'), 'info'); }
   function testPayment() { addToast('Razorpay connection verified ✓', 'success'); }
   function clearCache() { addToast('Server cache cleared.', 'success'); }
+
+  if (loading) {
+    return <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-muted)' }}>Loading settings…</div>;
+  }
 
   return (
     <div>
@@ -118,8 +129,8 @@ export default function SettingsPage() {
             <h1>Platform Settings</h1>
             <p>Configure backend services, integrations, and security settings.</p>
           </div>
-          <button className="btn btn-primary" onClick={save} id="save-platform-btn">
-            <Save size={15} /> Save All Settings
+          <button className="btn btn-primary" onClick={save} disabled={saving} id="save-platform-btn">
+            <Save size={15} /> {saving ? 'Saving…' : 'Save All Settings'}
           </button>
         </div>
       </div>
@@ -130,11 +141,11 @@ export default function SettingsPage() {
         <div className="section-card animate-fade-in-up stagger-1">
           <SectionHead icon={Globe} title="General" sub="Platform identity and public-facing URLs" />
           <div style={{ padding: '0 var(--space-lg)' }}>
-            <ConfigRow id="platform-name" label="Platform Name" value={cfg.platformName} onChange={v => update('platformName', v)} />
-            <ConfigRow id="platform-email" label="Admin Email" type="email" value={cfg.platformEmail} onChange={v => update('platformEmail', v)} />
-            <ConfigRow id="support-email" label="Support Email" type="email" value={cfg.supportEmail} onChange={v => update('supportEmail', v)} />
-            <ConfigRow id="app-url" label="App URL" value={cfg.appUrl} onChange={v => update('appUrl', v)} />
-            <ConfigRow id="api-url" label="API URL" value={cfg.apiUrl} onChange={v => update('apiUrl', v)} />
+            <ConfigRow id="platform-name" label="Platform Name" value={getValue('platformName', 'Lehkhabu')} onChange={v => update('platformName', v)} />
+            <ConfigRow id="platform-email" label="Admin Email" type="email" value={getValue('platformEmail', 'admin@lehkhabu.com')} onChange={v => update('platformEmail', v)} />
+            <ConfigRow id="support-email" label="Support Email" type="email" value={getValue('supportEmail', 'support@lehkhabu.com')} onChange={v => update('supportEmail', v)} />
+            <ConfigRow id="app-url" label="App URL" value={getValue('appUrl', 'https://lehkhabu.com')} onChange={v => update('appUrl', v)} />
+            <ConfigRow id="api-url" label="API URL" value={getValue('apiUrl', 'http://localhost:8000')} onChange={v => update('apiUrl', v)} />
           </div>
         </div>
 
@@ -142,9 +153,9 @@ export default function SettingsPage() {
         <div className="section-card animate-fade-in-up stagger-2">
           <SectionHead icon={Database} title="Database & Storage" sub="Supabase connection and storage settings" />
           <div style={{ padding: '0 var(--space-lg)' }}>
-            <ConfigRow id="supabase-url" label="Supabase URL" value={cfg.supabaseUrl} onChange={v => update('supabaseUrl', v)} />
-            <ConfigRow id="supabase-anon" label="Supabase Anon Key" value="••••••••••••" onChange={() => {}} secret placeholder="eyJhbGci..." />
-            <ConfigRow id="supabase-service" label="Supabase Service Key" value="••••••••••••" onChange={() => {}} secret placeholder="eyJhbGci..." />
+            <ConfigRow id="supabase-url" label="Supabase URL" value={getValue('supabaseUrl', 'https://thdltkblbodghicxfgdh.supabase.co')} onChange={v => update('supabaseUrl', v)} />
+            <ConfigRow id="supabase-anon" label="Supabase Anon Key" value={getValue('supabaseAnonKey', '')} onChange={v => update('supabaseAnonKey', v)} secret placeholder="eyJhbGci..." />
+            <ConfigRow id="supabase-service" label="Supabase Service Key" value={getValue('supabaseServiceKey', '')} onChange={v => update('supabaseServiceKey', v)} secret placeholder="eyJhbGci..." />
           </div>
         </div>
 
@@ -152,10 +163,10 @@ export default function SettingsPage() {
         <div className="section-card animate-fade-in-up stagger-3">
           <SectionHead icon={Mail} title="Email (SMTP)" sub="Transactional email configuration" />
           <div style={{ padding: '0 var(--space-lg)' }}>
-            <ConfigRow id="smtp-host" label="SMTP Host" value={cfg.smtpHost} onChange={v => update('smtpHost', v)} />
-            <ConfigRow id="smtp-port" label="SMTP Port" value={cfg.smtpPort} onChange={v => update('smtpPort', v)} />
-            <ConfigRow id="smtp-user" label="SMTP Username" value={cfg.smtpUser} onChange={v => update('smtpUser', v)} />
-            <ConfigRow id="smtp-pass" label="SMTP Password" value="••••••••" onChange={() => {}} secret />
+            <ConfigRow id="smtp-host" label="SMTP Host" value={getValue('smtpHost', 'smtp.postmarkapp.com')} onChange={v => update('smtpHost', v)} />
+            <ConfigRow id="smtp-port" label="SMTP Port" value={getValue('smtpPort', '587')} onChange={v => update('smtpPort', v)} />
+            <ConfigRow id="smtp-user" label="SMTP Username" value={getValue('smtpUser', 'admin@lehkhabu.com')} onChange={v => update('smtpUser', v)} />
+            <ConfigRow id="smtp-pass" label="SMTP Password" value={getValue('smtpPass', '')} onChange={v => update('smtpPass', v)} secret />
           </div>
           <div style={{ padding: 'var(--space-md) var(--space-lg)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-secondary btn-sm" onClick={testSmtp} id="test-smtp-btn">
@@ -172,15 +183,15 @@ export default function SettingsPage() {
               <label className="form-label" style={{ margin: 0 }}>Razorpay Mode</label>
               <div className="filter-tabs">
                 {(['test', 'live'] as const).map(m => (
-                  <button key={m} className={`filter-tab${cfg.razorpayMode === m ? ' active' : ''}`}
+                  <button key={m} className={`filter-tab${getValue('razorpayMode', 'test') === m ? ' active' : ''}`}
                     onClick={() => update('razorpayMode', m)} id={`razorpay-${m}-btn`}>
                     {m.charAt(0).toUpperCase() + m.slice(1)}
                   </button>
                 ))}
               </div>
             </div>
-            <ConfigRow id="razorpay-key" label="Key ID" value="rzp_test_••••••••••" onChange={() => {}} secret />
-            <ConfigRow id="razorpay-secret" label="Key Secret" value="••••••••••••••••" onChange={() => {}} secret />
+            <ConfigRow id="razorpay-key" label="Key ID" value={getValue('razorpayKey', '')} onChange={v => update('razorpayKey', v)} secret />
+            <ConfigRow id="razorpay-secret" label="Key Secret" value={getValue('razorpaySecret', '')} onChange={v => update('razorpaySecret', v)} secret />
           </div>
           <div style={{ padding: 'var(--space-md) var(--space-lg)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-secondary btn-sm" onClick={testPayment} id="test-payment-btn">
@@ -193,12 +204,12 @@ export default function SettingsPage() {
         <div className="section-card animate-fade-in-up stagger-5">
           <SectionHead icon={Server} title="AI Settings (Phase 2)" sub="Gemini & Pinecone for RAG-powered recommendations" />
           <div style={{ padding: '0 var(--space-lg)' }}>
-            <ToggleRow id="gemini-toggle" label="Enable Gemini AI" description="Power book recommendations and AI search" value={cfg.geminiEnabled} onChange={v => update('geminiEnabled', v)} />
-            {cfg.geminiEnabled && (
+            <ToggleRow id="gemini-toggle" label="Enable Gemini AI" description="Power book recommendations and AI search" value={getBoolean('geminiEnabled')} onChange={v => updateBoolean('geminiEnabled', v)} />
+            {getBoolean('geminiEnabled') && (
               <>
-                <ConfigRow id="gemini-key" label="Gemini API Key" value="AIzaSy••••••••" onChange={() => {}} secret />
-                <ConfigRow id="pinecone-key" label="Pinecone API Key" value="••••••••••••" onChange={() => {}} secret />
-                <ConfigRow id="pinecone-index" label="Pinecone Index" value="lehkhabu-books" onChange={() => update('supabaseUrl', 'lehkhabu-books')} />
+                <ConfigRow id="gemini-key" label="Gemini API Key" value={getValue('geminiKey', '')} onChange={v => update('geminiKey', v)} secret />
+                <ConfigRow id="pinecone-key" label="Pinecone API Key" value={getValue('pineconeKey', '')} onChange={v => update('pineconeKey', v)} secret />
+                <ConfigRow id="pinecone-index" label="Pinecone Index" value={getValue('pineconeIndex', 'lehkhabu-books')} onChange={v => update('pineconeIndex', v)} />
               </>
             )}
           </div>
@@ -208,12 +219,12 @@ export default function SettingsPage() {
         <div className="section-card animate-fade-in-up stagger-6">
           <SectionHead icon={Shield} title="Security" sub="Authentication, sessions, and access controls" />
           <div style={{ padding: '0 var(--space-lg)' }}>
-            <ToggleRow id="2fa-toggle" label="Two-Factor Authentication" description="Require 2FA for all admin logins" value={cfg.twoFactorEnabled} onChange={v => update('twoFactorEnabled', v)} />
-            <ToggleRow id="rate-limit-toggle" label="IP Rate Limiting" description="Limit login attempts per IP address" value={cfg.ipRateLimitEnabled} onChange={v => update('ipRateLimitEnabled', v)} />
+            <ToggleRow id="2fa-toggle" label="Two-Factor Authentication" description="Require 2FA for all admin logins" value={getBoolean('twoFactorEnabled')} onChange={v => updateBoolean('twoFactorEnabled', v)} />
+            <ToggleRow id="rate-limit-toggle" label="IP Rate Limiting" description="Limit login attempts per IP address" value={getBoolean('ipRateLimitEnabled', true)} onChange={v => updateBoolean('ipRateLimitEnabled', v)} />
             <ConfigRow id="session-timeout" label="Session Timeout (minutes)" type="number"
-              value={cfg.sessionTimeoutMinutes} onChange={v => update('sessionTimeoutMinutes', parseInt(v) || 0)} />
+              value={getValue('sessionTimeoutMinutes', '10080')} onChange={v => update('sessionTimeoutMinutes', v)} />
             <ConfigRow id="max-login-attempts" label="Max Login Attempts" type="number"
-              value={cfg.maxLoginAttempts} onChange={v => update('maxLoginAttempts', parseInt(v) || 0)} />
+              value={getValue('maxLoginAttempts', '5')} onChange={v => update('maxLoginAttempts', v)} />
           </div>
         </div>
 

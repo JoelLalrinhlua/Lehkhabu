@@ -1,9 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
-import { Save, Eye, EyeOff, Sliders, Layout, Type, Palette, Bell, Shield, ImageIcon, Upload } from 'lucide-react';
-import { defaultUISettings } from '../../store/mockData';
-import type { UISettings } from '../../types';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Save, Eye, EyeOff, Sliders, Layout, Type, Palette, Bell, Shield, ImageIcon, Upload, RefreshCw } from 'lucide-react';
 import { useToast } from '../../components/layout/AdminLayout';
-import { uploadFeaturesBg, fetchAppSettings } from '../../services/settings.service';
+import { uploadFeaturesBg, fetchAppSettings, updateSettings } from '../../services/settings.service';
 import type { AppSettings } from '../../services/settings.service';
 
 // ── Toggle Row ──────────────────────────────────────────────────
@@ -71,31 +69,58 @@ function SectionHead({ icon: Icon, title, sub }: { icon: React.ElementType; titl
 
 export default function UISettingsPage() {
   const { addToast } = useToast();
-  const [settings, setSettings] = useState<UISettings>(defaultUISettings);
-  const [previewMode, setPreviewMode] = useState(false);
-
-  // Features BG state
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
   const [bgUploading, setBgUploading] = useState(false);
   const [bgPreviewUrl, setBgPreviewUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const bgInputRef = useRef<HTMLInputElement>(null);
 
-  // Load existing app settings on mount
-  useEffect(() => {
-    fetchAppSettings()
-      .then((s) => {
-        setAppSettings(s);
-        setBgPreviewUrl(s.features_bg_image_url);
-      })
-      .catch(console.error);
-  }, []);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const s = await fetchAppSettings();
+      setAppSettings(s);
+      setBgPreviewUrl(s.features_bg_image_url);
+    } catch (e: any) {
+      addToast(e.message ?? 'Failed to load settings.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
 
-  function update<K extends keyof UISettings>(key: K, value: UISettings[K]) {
-    setSettings(prev => ({ ...prev, [key]: value }));
+  useEffect(() => { load(); }, [load]);
+
+  function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
+    setAppSettings(prev => prev ? { ...prev, [key]: value } : prev);
   }
 
-  function save() {
-    addToast('UI settings saved and applied to user frontend!', 'success');
+  async function save() {
+    if (!appSettings) return;
+    setSaving(true);
+    try {
+      await updateSettings({
+        home_hero_text: appSettings.home_hero_text,
+        home_sub_text: appSettings.home_sub_text,
+        features_bg_overlay_opacity: appSettings.features_bg_overlay_opacity,
+        maintenance_mode: appSettings.maintenance_mode,
+        allow_registrations: appSettings.allow_registrations,
+        platform_fee_percent: appSettings.platform_fee_percent,
+        featured_section_title: appSettings.featured_section_title,
+        new_books_highlight: appSettings.new_books_highlight,
+        announcement_banner_active: appSettings.announcement_banner_active,
+        announcement_banner_text: appSettings.announcement_banner_text,
+        max_books_per_user: appSettings.max_books_per_user,
+        default_currency: appSettings.default_currency,
+        platform_name: appSettings.platform_name,
+      });
+      addToast('UI settings saved and applied!', 'success');
+    } catch (e: any) {
+      addToast(e.message ?? 'Failed to save settings.', 'error');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleBgUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -122,6 +147,14 @@ export default function UISettingsPage() {
     }
   }
 
+  if (loading || !appSettings) {
+    return (
+      <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-muted)' }}>
+        Loading settings…
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -131,12 +164,15 @@ export default function UISettingsPage() {
             <p>Manage what users see on the Lehkhabu reader app — banners, text, features and toggles.</p>
           </div>
           <div className="page-header-actions">
+            <button className="btn btn-secondary btn-sm" onClick={load} id="refresh-ui-btn">
+              <RefreshCw size={14} /> Refresh
+            </button>
             <button className="btn btn-secondary" onClick={() => setPreviewMode(v => !v)} id="preview-toggle-btn">
               {previewMode ? <EyeOff size={15} /> : <Eye size={15} />}
               {previewMode ? 'Hide Preview' : 'Preview'}
             </button>
-            <button className="btn btn-primary" onClick={save} id="save-ui-settings-btn">
-              <Save size={15} /> Save Changes
+            <button className="btn btn-primary" onClick={save} disabled={saving} id="save-ui-settings-btn">
+              <Save size={15} /> {saving ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
         </div>
@@ -155,19 +191,19 @@ export default function UISettingsPage() {
             </div>
             {/* Simulated User App Header */}
             <div style={{ background: '#FDF6EC', borderRadius: 'var(--radius-md)', padding: 'var(--space-lg)', color: '#1A1A1A', boxShadow: 'var(--shadow-md)' }}>
-              {settings.announcementBannerActive && settings.announcementBannerText && (
+              {appSettings.announcement_banner_active === 'true' && appSettings.announcement_banner_text && (
                 <div style={{ background: '#F5A623', color: '#fff', padding: '8px 14px', borderRadius: 'var(--radius-sm)', marginBottom: 12, fontSize: '0.82rem', fontWeight: 500 }}>
-                  📣 {settings.announcementBannerText}
+                  📣 {appSettings.announcement_banner_text}
                 </div>
               )}
               <div style={{ fontFamily: 'Georgia, serif', fontSize: '1.5rem', fontWeight: 700, color: '#C17817', marginBottom: 4 }}>
-                {settings.homeHeroText || 'Your Mizo Reading Universe'}
+                {appSettings.home_hero_text || 'Your Mizo Reading Universe'}
               </div>
               <div style={{ fontSize: '0.875rem', color: '#555', marginBottom: 16 }}>
-                {settings.homeSubText || 'Discover books written by your favourite Mizo authors.'}
+                {appSettings.home_sub_text || 'Discover books written by your favourite Mizo authors.'}
               </div>
               <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1A1A1A', marginBottom: 8 }}>
-                {settings.featuredSectionTitle || 'Featured Picks'}
+                {appSettings.featured_section_title || 'Featured Picks'}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {['#C17817', '#4F8EF7', '#34D399'].map((c, i) => (
@@ -240,11 +276,11 @@ export default function UISettingsPage() {
           <SectionHead icon={Type} title="Hero & Branding" sub="Control the main landing text and featured section labels" />
           <div style={{ padding: '0 var(--space-lg)' }}>
             <InputRow id="hero-text" label="Hero Tagline" description="Main headline shown on the home screen"
-              value={settings.homeHeroText} onChange={v => update('homeHeroText', v)} />
+              value={appSettings.home_hero_text} onChange={v => update('home_hero_text', v)} />
             <InputRow id="hero-sub" label="Hero Subtext" description="Subtitle/description below the tagline"
-              value={settings.homeSubText} onChange={v => update('homeSubText', v)} />
+              value={appSettings.home_sub_text} onChange={v => update('home_sub_text', v)} />
             <InputRow id="featured-title" label="Featured Section Title" description="Title shown above the featured books grid"
-              value={settings.featuredSectionTitle} onChange={v => update('featuredSectionTitle', v)} />
+              value={appSettings.featured_section_title} onChange={v => update('featured_section_title', v)} />
           </div>
         </div>
 
@@ -254,11 +290,12 @@ export default function UISettingsPage() {
           <div style={{ padding: '0 var(--space-lg)' }}>
             <ToggleRow id="ann-banner-active" label="Enable Announcement Banner"
               description="Show a banner strip to all users at the top of the app"
-              value={settings.announcementBannerActive} onChange={v => update('announcementBannerActive', v)} />
-            {settings.announcementBannerActive && (
+              value={appSettings.announcement_banner_active === 'true'}
+              onChange={v => update('announcement_banner_active', v ? 'true' : 'false')} />
+            {appSettings.announcement_banner_active === 'true' && (
               <InputRow id="ann-banner-text" label="Banner Message"
                 description="Text displayed in the announcement banner"
-                value={settings.announcementBannerText} onChange={v => update('announcementBannerText', v)} />
+                value={appSettings.announcement_banner_text} onChange={v => update('announcement_banner_text', v)} />
             )}
           </div>
         </div>
@@ -267,12 +304,10 @@ export default function UISettingsPage() {
         <div className="section-card animate-fade-in-up stagger-3">
           <SectionHead icon={Layout} title="Layout & Sections" sub="Control which UI sections are shown to users" />
           <div style={{ padding: '0 var(--space-lg)' }}>
-            <ToggleRow id="hero-banner-enabled" label="Hero Banner Section"
-              description="Show the visual banner on the home page"
-              value={settings.heroBannerEnabled} onChange={v => update('heroBannerEnabled', v)} />
             <ToggleRow id="new-books-highlight" label="New Arrivals Section"
               description="Highlight recently added books on the home page"
-              value={settings.newBooksHighlight} onChange={v => update('newBooksHighlight', v)} />
+              value={appSettings.new_books_highlight === 'true'}
+              onChange={v => update('new_books_highlight', v ? 'true' : 'false')} />
           </div>
         </div>
 
@@ -282,13 +317,15 @@ export default function UISettingsPage() {
           <div style={{ padding: '0 var(--space-lg)' }}>
             <ToggleRow id="allow-registrations" label="Allow New Registrations"
               description="New users can create accounts on the platform"
-              value={settings.allowRegistrations} onChange={v => update('allowRegistrations', v)} />
+              value={appSettings.allow_registrations === 'true'}
+              onChange={v => update('allow_registrations', v ? 'true' : 'false')} />
             <ToggleRow id="maintenance-mode" label="Maintenance Mode"
               description="Temporarily disable access to the user app with a maintenance page"
-              value={settings.maintenanceMode} onChange={v => update('maintenanceMode', v)} />
+              value={appSettings.maintenance_mode === 'true'}
+              onChange={v => update('maintenance_mode', v ? 'true' : 'false')} />
             <InputRow id="max-books" label="Max Books Per Library" type="number"
               description="Maximum number of books a user can own in their library"
-              value={settings.maxBooksPerUser} onChange={v => update('maxBooksPerUser', parseInt(v) || 0)} />
+              value={appSettings.max_books_per_user} onChange={v => update('max_books_per_user', v)} />
           </div>
         </div>
 
@@ -297,10 +334,10 @@ export default function UISettingsPage() {
           <SectionHead icon={Palette} title="Commerce Settings" sub="Pricing, currency and platform revenue share" />
           <div style={{ padding: '0 var(--space-lg)' }}>
             <InputRow id="currency" label="Default Currency" description="Currency displayed to users (e.g. INR, USD)"
-              value={settings.defaultCurrency} onChange={v => update('defaultCurrency', v)} />
+              value={appSettings.default_currency} onChange={v => update('default_currency', v)} />
             <InputRow id="platform-fee" label="Platform Fee %" type="number"
               description="Percentage of each sale kept by Lehkhabu before paying authors"
-              value={settings.platformFeePercent} onChange={v => update('platformFeePercent', parseFloat(v) || 0)} />
+              value={appSettings.platform_fee_percent} onChange={v => update('platform_fee_percent', v)} />
           </div>
         </div>
 
@@ -341,8 +378,8 @@ export default function UISettingsPage() {
           boxShadow: 'var(--shadow-lg)', backdropFilter: 'blur(12px)'
         }}>
           <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Unsaved changes</span>
-          <button className="btn btn-primary" onClick={save} id="save-ui-sticky-btn" style={{ borderRadius: 'var(--radius-full)' }}>
-            <Save size={14} /> Save Settings
+          <button className="btn btn-primary" onClick={save} disabled={saving} id="save-ui-sticky-btn" style={{ borderRadius: 'var(--radius-full)' }}>
+            <Save size={14} /> {saving ? 'Saving…' : 'Save Settings'}
           </button>
         </div>
       </div>

@@ -7,6 +7,9 @@ import ExplorePage from '../pages/ExplorePage';
 import LibraryPage from '../pages/LibraryPage';
 import BookDetailPage from '../pages/BookDetailPage';
 import ProfilePage from '../pages/ProfilePage';
+import ProfileSettingsPage from '../pages/settings/ProfileSettingsPage';
+import AccountSettingsPage from '../pages/settings/AccountSettingsPage';
+import PublicProfilePage from '../pages/PublicProfilePage';
 import ReaderPage from '../pages/ReaderPage';
 import AuthorApplicationPage from '../pages/AuthorApplicationPage';
 import AuthorDashboardPage from '../pages/AuthorDashboardPage';
@@ -27,14 +30,17 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true,           element: <HomePage />              },
-      { path: 'explore',       element: <ExplorePage />           },
-      { path: 'search',        element: <ExplorePage />           },
-      { path: 'library',       element: <LibraryPage />           },
-      { path: 'book/:id',      element: <BookDetailPage />        },
-      { path: 'profile',       element: <ProfilePage />           },
-      { path: 'apply',         element: <AuthorApplicationPage /> },
-      { path: 'author',        element: <AuthorDashboardPage />   },
+      { index: true,                       element: <HomePage />              },
+      { path: 'explore',                   element: <ExplorePage />           },
+      { path: 'search',                    element: <ExplorePage />           },
+      { path: 'library',                   element: <LibraryPage />           },
+      { path: 'book/:id',                  element: <BookDetailPage />        },
+      { path: 'u/:username',               element: <PublicProfilePage />     },
+      { path: 'profile',                   element: <ProfilePage />           },
+      { path: 'profile/settings/profile',  element: <ProfileSettingsPage />   },
+      { path: 'profile/settings/account',  element: <AccountSettingsPage />   },
+      { path: 'apply',                     element: <AuthorApplicationPage /> },
+      { path: 'author',                    element: <AuthorDashboardPage />   },
     ],
   },
 

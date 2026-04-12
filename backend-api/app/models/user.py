@@ -40,6 +40,7 @@ class User(Base):
         Enum(UserRole, name="userrole"), default=UserRole.USER, nullable=False
     )
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_bg_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -47,6 +48,8 @@ class User(Base):
     # Social
     following_count: Mapped[int] = mapped_column(default=0, nullable=False)
     followers_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    social_links: Mapped[str | None] = mapped_column(Text, nullable=True) # JSON string
+    is_public_library: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Supabase auth UID (optional – for cases where Supabase handles login)
     supabase_uid: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)

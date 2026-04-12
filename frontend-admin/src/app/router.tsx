@@ -10,6 +10,7 @@ import AnalyticsPage from '../features/analytics/AnalyticsPage';
 import AnnouncementsPage from '../features/analytics/AnnouncementsPage';
 import UISettingsPage from '../features/analytics/UISettingsPage';
 import SettingsPage from '../features/analytics/SettingsPage';
+import AdminAccountsPage from '../features/analytics/AdminAccountsPage';
 
 export const router = createBrowserRouter([
   {
@@ -26,7 +27,7 @@ export const router = createBrowserRouter([
       { path: 'announcements',    element: <AnnouncementsPage /> },
       { path: 'ui-settings',      element: <UISettingsPage /> },
       { path: 'settings',         element: <SettingsPage /> },
+      { path: 'admins',           element: <AdminAccountsPage /> },
     ],
   },
 ]);
-

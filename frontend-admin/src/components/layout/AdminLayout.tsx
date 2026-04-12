@@ -5,7 +5,7 @@ import {
   Settings, Bell, Search, Menu, X, LogOut, ChevronDown,
   Megaphone, ShoppingCart, Star, Sliders, ClipboardList
 } from 'lucide-react';
-import { mockApplications } from '../../store/mockData';
+import { fetchDashboardStats, type DashboardStats } from '../../services/analytics.service';
 import '../../App.css';
 
 // ── Toast Context ──────────────────────────────────────────────
@@ -16,25 +16,24 @@ export const ToastContext = createContext<ToastCtx>({ addToast: () => {} });
 export function useToast() { return useContext(ToastContext); }
 
 // ── Nav Items ──────────────────────────────────────────────────
-const pendingAppsCount = mockApplications.filter(a => a.status === 'pending').length;
-
 const mainNav = [
   { to: '/',              label: 'Dashboard',    icon: LayoutDashboard },
-  { to: '/books',         label: 'Books',        icon: BookOpen,       badge: 2 },
+  { to: '/books',         label: 'Books',        icon: BookOpen,       badgeKey: 'pendingBooks' },
   { to: '/authors',       label: 'Authors',      icon: Star },
   { to: '/users',         label: 'Users',        icon: Users },
-  { to: '/applications',  label: 'Applications', icon: ClipboardList,  badge: pendingAppsCount || undefined },
+  { to: '/applications',  label: 'Applications', icon: ClipboardList,  badgeKey: 'pendingApplications' },
   { to: '/orders',        label: 'Orders',       icon: ShoppingCart },
   { to: '/analytics',     label: 'Analytics',    icon: BarChart3 },
 ];
 const managementNav = [
+  { to: '/admins',        label: 'Admin Accounts',   icon: UserCheck },
   { to: '/announcements', label: 'Announcements', icon: Megaphone },
   { to: '/ui-settings',   label: 'User UI Control', icon: Sliders },
   { to: '/settings',      label: 'Settings',         icon: Settings },
 ];
 
 // ── Sidebar ────────────────────────────────────────────────────
-function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+function Sidebar({ open, onClose, stats }: { open: boolean; onClose: () => void; stats: DashboardStats | null }) {
   const location = useLocation();
   return (
     <>
@@ -58,6 +57,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             const isActive = item.to === '/'
               ? location.pathname === '/'
               : location.pathname.startsWith(item.to);
+            const badgeValue = item.badgeKey && stats ? stats[item.badgeKey as keyof DashboardStats] as number : 0;
             return (
               <NavLink
                 key={item.to}
@@ -67,7 +67,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
               >
                 <Icon size={17} />
                 <span>{item.label}</span>
-                {item.badge ? <span className="nav-link-badge">{item.badge}</span> : null}
+                {badgeValue > 0 ? <span className="nav-link-badge">{badgeValue}</span> : null}
               </NavLink>
             );
           })}
@@ -219,6 +219,11 @@ function ToastContainer({ toasts, remove }: { toasts: Toast[]; remove: (id: stri
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+
+  useEffect(() => {
+    fetchDashboardStats().then(setStats).catch(console.error);
+  }, []);
 
   const addToast = (message: string, type: Toast['type'] = 'success') => {
     const id = Date.now().toString();
@@ -230,7 +235,7 @@ export default function AdminLayout() {
   return (
     <ToastContext.Provider value={{ addToast }}>
       <div className="admin-shell">
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} stats={stats} />
         <div className="admin-main">
           <TopBar onMenuClick={() => setSidebarOpen(true)} />
           <div className="admin-page">

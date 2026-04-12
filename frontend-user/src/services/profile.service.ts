@@ -74,12 +74,41 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
   return `${data.publicUrl}?v=${Date.now()}`;
 }
 
+export async function uploadProfileBackground(userId: string, file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please select an image file (JPEG, PNG, or WebP).');
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('Image must be smaller than 10MB.');
+  }
+
+  // Compress to standard HD width max
+  const compressed = await compressImage(file, 1920);
+  const ext = 'webp';
+  const filePath = `${userId}/background.${ext}`;
+
+  const { error } = await supabase.storage
+    .from('avatars') // Or create 'profile-backgrounds' bucket? Let's just use avatars bucket for all user media
+    .upload(filePath, compressed, {
+      contentType: 'image/webp',
+      upsert: true,
+    });
+
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+
+  const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
+
 // ── Profile Updates ──────────────────────────────────────────────
 export interface ProfileUpdateData {
   full_name?: string;
   username?: string;
   bio?: string;
   avatar_url?: string;
+  profile_bg_url?: string | null;
+  social_links?: Record<string, string> | null;
+  is_public_library?: boolean;
 }
 
 export async function updateUserProfile(

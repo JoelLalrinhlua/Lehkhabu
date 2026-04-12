@@ -9,6 +9,7 @@ export interface AppUserProfile {
   full_name: string;
   username: string;
   avatar_url: string | null;
+  profile_bg_url: string | null;
   bio: string | null;
   role: 'USER' | 'AUTHOR' | 'ADMIN';
   is_active: boolean;
@@ -18,6 +19,8 @@ export interface AppUserProfile {
   supabase_uid: string;
   created_at: string;
   updated_at: string;
+  social_links: Record<string, string> | null;
+  is_public_library: boolean;
 }
 
 interface AuthState {
