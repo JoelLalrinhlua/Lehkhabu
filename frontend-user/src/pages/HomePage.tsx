@@ -1,250 +1,284 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useBooksStore } from '../store/booksStore';
-import type { Book } from '../services/books.service';
+import type { Book, ShelfEntry } from '../services/books.service';
 import BookCover from '../components/common/BookCover';
-import BookCard from '../components/common/BookCard';
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Romance: '#E8845A', Fantasy: '#D4855F', Horror: '#7B5EA7',
-  Historical: '#5D8A6C', Biography: '#4A7DAA', 'Young Adult': '#E9A84C',
-  Science: '#5BA4A4', 'Self-Help': '#C97C3A', Psychology: '#6B7DB3',
-  Design: '#D45F8A', Fiction: '#7A9E7E', Wellness: '#C88B4A',
-  Novel: '#8B6A7A', Poetry: '#6A8BAF', Spiritual: '#7A9E7E',
-  History: '#8B7355', Religious: '#7A6A8B', 'Short Stories': '#A07A5A',
-};
+/* ── Tiny reusable heart button ─────────────────────────── */
+function HeartBtn({
+  bookId,
+  userId,
+}: {
+  bookId: string;
+  userId: string | undefined;
+}) {
+  const { isInWishlist, toggleWishlist } = useBooksStore();
+  const [loading, setLoading] = useState(false);
+  const active = isInWishlist(bookId);
 
-const CATEGORY_ICONS: Record<string, string> = {
-  Romance: '💕', Fantasy: '🐉', Horror: '👻', Historical: '🏛️',
-  Biography: '👤', 'Young Adult': '⭐', Science: '🔬', 'Self-Help': '🧘',
-  Psychology: '🧠', Design: '🎨', Fiction: '📖', Wellness: '🌿',
-  Novel: '📕', Poetry: '🎭', Spiritual: '🙏', History: '📜',
-  Religious: '⛪', 'Short Stories': '📝',
-};
+  const handle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!userId || loading) return;
+    setLoading(true);
+    try { await toggleWishlist(userId, bookId); }
+    finally { setLoading(false); }
+  };
 
+  return (
+    <button
+      className={`hb-heart${active ? ' hb-heart--active' : ''}`}
+      onClick={handle}
+      aria-label={active ? 'Remove from wishlist' : 'Add to wishlist'}
+      disabled={loading}
+    >
+      <svg viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+      </svg>
+    </button>
+  );
+}
+
+/* ── 3-D Grid Book Card ─────────────────────────────────── */
+function GridBookCard({ book, userId }: { book: Book; userId: string | undefined }) {
+  const navigate = useNavigate();
+  return (
+    <div className="hb-book-card" onClick={() => navigate(`/book/${book.id}`)}>
+      <div className="hb-book-card-top">
+        <span className="hb-read-now">READ NOW</span>
+        <HeartBtn bookId={book.id} userId={userId} />
+      </div>
+      <div className="hb-book-3d-wrap">
+        <BookCover book={book} className="hb-book-3d-cover" />
+      </div>
+      <div className="hb-book-info">
+        {book.average_rating > 0 && (
+          <div className="hb-book-rating">
+            <svg viewBox="0 0 24 24" fill="#F5A623" width="11" height="11">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            {book.average_rating.toFixed(1)}
+          </div>
+        )}
+        <div className="hb-book-title">{book.title}</div>
+        <div className="hb-book-author">by {book.author_name}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Horizontal scroll book strip ───────────────────────── */
+function BookStrip({ books, userId }: { books: Book[]; userId: string | undefined }) {
+  const navigate = useNavigate();
+  return (
+    <div className="hb-strip">
+      {books.map((book) => (
+        <div key={book.id} className="hb-strip-card" onClick={() => navigate(`/book/${book.id}`)}>
+          <div className="hb-strip-cover-wrap">
+            <BookCover book={book} className="hb-strip-cover" />
+            <div className="hb-strip-heart-wrap">
+              <HeartBtn bookId={book.id} userId={userId} />
+            </div>
+          </div>
+          <div className="hb-strip-title">{book.title}</div>
+          <div className="hb-strip-author">{book.author_name}</div>
+          {book.average_rating > 0 && (
+            <div className="hb-book-rating" style={{ marginTop: 2 }}>
+              <svg viewBox="0 0 24 24" fill="#F5A623" width="10" height="10">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              {book.average_rating.toFixed(1)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Continue Reading card ──────────────────────────────── */
+function ContinueReadingCard({ entry, book }: { entry: ShelfEntry; book: Book }) {
+  const navigate = useNavigate();
+  const progress = 40; // placeholder — real progress comes from readingProgress
+
+  return (
+    <div
+      className="hb-cr-row"
+      onClick={() => navigate(`/read/${entry.book_id}`)}
+    >
+      <div className="hb-cr-cover-wrap">
+        <BookCover book={book} className="hb-cr-cover" />
+      </div>
+      <div className="hb-cr-info">
+        <span className="hb-read-now" style={{ marginBottom: 3 }}>CONTINUE READING</span>
+        <div className="hb-cr-title">{book.title}</div>
+        <div className="hb-cr-sub">by {book.author_name}</div>
+        <div className="hb-cr-bar">
+          <div className="hb-cr-bar-fill" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="hb-cr-progress-label">{progress}% completed</div>
+      </div>
+      <div className="hb-cr-chevron">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main HomePage ──────────────────────────────────────── */
 export default function HomePage() {
   const navigate = useNavigate();
   const { profile } = useAuthStore();
-  const { books, booksLoading, booksError, loadBooks, shelf } = useBooksStore();
-  const [featuredIdx, setFeaturedIdx] = useState(0);
-  const [likedActivities, setLikedActivities] = useState<Set<string>>(new Set());
-  const carouselRef = useRef<HTMLDivElement>(null);
+  const { books, booksLoading, loadBooks, shelf } = useBooksStore();
 
+  const userId = profile?.supabase_uid;
   const firstName = profile?.full_name?.split(' ')[0] ?? profile?.username ?? 'Reader';
 
   useEffect(() => {
-    if (books.length === 0 && !booksLoading) {
-      loadBooks();
-    }
+    if (books.length === 0 && !booksLoading) loadBooks();
   }, []);
 
-  const featuredBooks = books
-    .sort((a, b) => b.average_rating - a.average_rating)
-    .slice(0, 5);
+  /* Derived data ─────────────────────────────────────── */
+  // Hero: top-rated book
+  const heroBook = [...books].sort((a, b) => b.average_rating - a.average_rating)[0];
 
-  const recommended = books.slice(0, 8);
-  const popular = [...books].sort((a, b) => b.purchase_count - a.purchase_count).slice(0, 8);
+  // Recommended: rotate through books offset from hero
+  const recommended = books.filter(b => b.id !== heroBook?.id).slice(0, 10);
 
-  // Currently reading from user's shelf
-  const currentlyReading = shelf
-    .filter((s) => s.shelf === 'READING' && s.books)
-    .slice(0, 1);
+  // Popular: by purchase count
+  const popular = [...books]
+    .sort((a, b) => b.purchase_count - a.purchase_count)
+    .filter(b => b.id !== heroBook?.id)
+    .slice(0, 6);
 
-  // Unique categories from real books
-  const categories = [...new Set(books.map((b) => b.category))].slice(0, 12);
+  // Currently Reading
+  const readingEntries = shelf.filter(s => s.shelf === 'READING' && s.books).slice(0, 3);
 
-  const goToFeatured = (idx: number) => {
-    setFeaturedIdx(idx);
-    if (carouselRef.current) {
-      const card = carouselRef.current.children[idx] as HTMLElement;
-      card?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-  };
+  // New Arrivals (latest created_at)
+  const newArrivals = [...books]
+    .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+    .slice(0, 8);
 
-  const toggleLike = (id: string) =>
-    setLikedActivities((prev) => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-
-  if (booksError) {
-    return (
-      <div className="page">
-        <div className="empty-state">
-          <div className="empty-state-icon">⚠️</div>
-          <h3>Couldn't load books</h3>
-          <p>{booksError}</p>
-          <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => loadBooks()}>
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
+  /* Section header helper ────────────────────────────── */
+  const SectionHeader = ({
+    title,
+    onSeeAll,
+  }: {
+    title: string;
+    onSeeAll?: () => void;
+  }) => (
+    <div className="hb-section-header">
+      <span>{title}</span>
+      {onSeeAll && <button onClick={onSeeAll}>See all</button>}
+    </div>
+  );
 
   return (
-    <div className="page">
-      {/* ── Greeting ─────────────────────────────────────────────── */}
-      <div className="home-greeting">
-        <h1>Hi, <span>{firstName}!</span></h1>
-        <button className="greeting-icon" onClick={() => navigate('/profile')} aria-label="Profile">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
-            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-          </svg>
-        </button>
+    <div className="hb-page">
+
+      {/* ── Greeting ────────────────────────────────────── */}
+      <div className="hb-greeting">
+        <div>
+          <div className="hb-greeting-sub">Good reading, 📖</div>
+          <h1 className="hb-greeting-name">{firstName}!</h1>
+        </div>
       </div>
 
-      {/* ── Featured Books ─────────────────────────────────────────── */}
+      {/* ── Hero / Popular card ──────────────────────────── */}
       {booksLoading ? (
-        <div className="featured-skeleton">
-          <div className="skeleton-card" />
-        </div>
-      ) : featuredBooks.length > 0 ? (
-        <div className="featured-section">
-          <div className="featured-carousel" ref={carouselRef}>
-            {featuredBooks.map((book, idx) => (
-              <div
-                key={book.id}
-                className={`featured-card ${idx === featuredIdx ? 'active' : ''}`}
-              >
-                <div className="featured-cover-col" onClick={() => navigate(`/book/${book.id}`)}>
-                  <BookCover book={book} className="featured-cover" />
-                </div>
-                <div className="featured-info">
-                  <div className="featured-label">✦ FEATURED</div>
-                  <h2 className="featured-title">{book.title}</h2>
-                  <div className="featured-author">{book.author_name}</div>
-                  <div className="featured-stars">
-                    {'★'.repeat(Math.floor(book.average_rating))}
-                    {'☆'.repeat(5 - Math.floor(book.average_rating))}
-                    <span>{book.average_rating.toFixed(1)}</span>
-                  </div>
-                  <div className="featured-actions">
-                    <button
-                      className="featured-view-btn"
-                      onClick={() => navigate(`/book/${book.id}`)}
-                    >
-                      View Book
-                    </button>
-                  </div>
-                </div>
+        <div className="hb-hero-skeleton" />
+      ) : heroBook ? (
+        <div className="hb-hero-card" onClick={() => navigate(`/book/${heroBook.id}`)}>
+          <div className="hb-hero-info">
+            <div className="hb-hero-badge">🔥 Popular Right Now</div>
+            <h2 className="hb-hero-title">{heroBook.title}</h2>
+            <div className="hb-hero-author">
+              {heroBook.author_name}
+              {heroBook.published_year ? ` · ${heroBook.published_year}` : ''}
+            </div>
+            {heroBook.average_rating > 0 && (
+              <div className="hb-hero-stars">
+                {'★'.repeat(Math.round(heroBook.average_rating))}
+                {'☆'.repeat(5 - Math.round(heroBook.average_rating))}
+                <span>{heroBook.average_rating.toFixed(1)}</span>
               </div>
-            ))}
-          </div>
-          <div className="featured-dots">
-            {featuredBooks.map((_, i) => (
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
               <button
-                key={i}
-                className={`featured-dot ${i === featuredIdx ? 'active' : ''}`}
-                onClick={() => goToFeatured(i)}
-                aria-label={`Go to featured book ${i + 1}`}
-              />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="home-empty-featured">
-          <div className="empty-state-icon">📚</div>
-          <p>No books published yet. Check back soon!</p>
-          <button className="featured-view-btn" onClick={() => navigate('/explore')}>
-            Browse All
-          </button>
-        </div>
-      )}
-
-      {/* ── Currently Reading ─────────────────────────────────────── */}
-      {currentlyReading.length > 0 && currentlyReading[0].books && (
-        <>
-          <div className="section-header">
-            <h2>Currently Reading</h2>
-            <button onClick={() => navigate('/library')}>See all</button>
-          </div>
-          <div
-            className="currently-reading-card"
-            onClick={() => navigate(`/read/${currentlyReading[0].book_id}`)}
-          >
-            <BookCover book={currentlyReading[0].books as unknown as Book} className="cr-cover" />
-            <div className="cr-info">
-              <h3>{(currentlyReading[0].books as unknown as Book).title}</h3>
-              <span className="author">by {(currentlyReading[0].books as unknown as Book).author_id}</span>
-              <button
-                className="cr-update-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/read/${currentlyReading[0].book_id}`);
-                }}
+                className="hb-hero-btn"
+                onClick={(e) => { e.stopPropagation(); navigate(`/book/${heroBook.id}`); }}
               >
-                Continue Reading →
+                Read More →
               </button>
+              <div onClick={e => e.stopPropagation()}>
+                <HeartBtn bookId={heroBook.id} userId={userId} />
+              </div>
             </div>
           </div>
-        </>
+          <div className="hb-hero-book-wrap">
+            <BookCover book={heroBook} className="hb-hero-cover" />
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Continue Reading ─────────────────────────────── */}
+      {readingEntries.length > 0 && (
+        <div className="hb-continue-section">
+          <SectionHeader title="Continue Reading 📖" onSeeAll={() => navigate('/library')} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {readingEntries.map((entry) => {
+              const book = entry.books as unknown as Book;
+              if (!book) return null;
+              return <ContinueReadingCard key={entry.book_id} entry={entry} book={book} />;
+            })}
+          </div>
+        </div>
       )}
 
-      {/* ── Category Genre Pills ──────────────────────────────────── */}
-      {categories.length > 0 && (
-        <div className="category-section">
-          <div className="category-question">What would you like to read next?</div>
-          <div className="category-pills">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                className="book-genre-pill"
-                style={{ '--book-color': CATEGORY_COLORS[cat] ?? '#C17817' } as React.CSSProperties}
-                onClick={() => navigate(`/explore?category=${encodeURIComponent(cat)}`)}
-              >
-                <div className="book-genre-cover">
-                  <div className="book-genre-spine" />
-                  <div className="book-genre-face">
-                    <span className="book-genre-icon">{CATEGORY_ICONS[cat] ?? '📖'}</span>
-                  </div>
-                </div>
-                <span className="book-genre-label">{cat}</span>
-              </button>
+      {/* ── Recommended for You ──────────────────────────── */}
+      {!booksLoading && recommended.length > 0 && (
+        <div>
+          <SectionHeader title="Recommended for You ✨" onSeeAll={() => navigate('/explore')} />
+          <BookStrip books={recommended.slice(0, 8)} userId={userId} />
+        </div>
+      )}
+
+      {/* ── Popular Books Grid ───────────────────────────── */}
+      {!booksLoading && popular.length > 0 && (
+        <div>
+          <SectionHeader title="Popular This Week 🏆" onSeeAll={() => navigate('/explore')} />
+          <div className="hb-grid">
+            {popular.map((book) => (
+              <GridBookCard key={book.id} book={book} userId={userId} />
             ))}
           </div>
         </div>
       )}
 
-      {/* ── Recommendations ───────────────────────────────────────── */}
-      {recommended.length > 0 && (
-        <div className="recommendation-section">
-          <div className="section-header">
-            <h2>Recommended for You</h2>
-            <button onClick={() => navigate('/explore')}>See all</button>
-          </div>
-          <div className="recommendation-scroll">
-            {recommended.map((b) => <BookCard key={b.id} book={b} />)}
-          </div>
+      {/* ── New Arrivals ─────────────────────────────────── */}
+      {!booksLoading && newArrivals.length > 0 && (
+        <div>
+          <SectionHeader title="New Arrivals 🆕" onSeeAll={() => navigate('/explore')} />
+          <BookStrip books={newArrivals.slice(0, 8)} userId={userId} />
         </div>
       )}
 
-      {/* ── Popular ───────────────────────────────────────────────── */}
-      {popular.length > 0 && (
-        <div className="recommendation-section">
-          <div className="section-header">
-            <h2>Popular This Week</h2>
-            <button onClick={() => navigate('/explore')}>See all</button>
-          </div>
-          <div className="recommendation-scroll recommendation-scroll-lg">
-            {popular.map((b) => <BookCard key={b.id} book={b} large />)}
-          </div>
-        </div>
-      )}
-
-      {/* ── Empty state when no books exist ──────────────────────── */}
+      {/* ── Empty state ──────────────────────────────────── */}
       {!booksLoading && books.length === 0 && (
-        <div className="empty-state" style={{ marginTop: 'var(--space-2xl)' }}>
-          <div className="empty-state-icon">📚</div>
+        <div className="hb-empty">
+          <div style={{ fontSize: '3rem' }}>📚</div>
           <h3>No books yet</h3>
           <p>Be the first to publish on Lehkhabu!</p>
-          <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => navigate('/apply')}>
-            Become an Author
+          <button className="hb-hero-btn" style={{ marginTop: 16 }} onClick={() => navigate('/explore')}>
+            Explore Library
           </button>
         </div>
       )}
+
+      {/* bottom spacing for nav */}
+      <div style={{ height: 24 }} />
     </div>
   );
 }

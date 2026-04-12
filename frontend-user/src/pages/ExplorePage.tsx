@@ -1,184 +1,320 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useBooksStore } from '../store/booksStore';
-import BookCard from '../components/common/BookCard';
+import { useAuthStore } from '../store/authStore';
+import BookCover from '../components/common/BookCover';
+import type { Book } from '../services/books.service';
 
+/* ── Sort options ─────────────────────────────────────────── */
+type SortKey = 'relevance' | 'rating' | 'newest' | 'popular' | 'title';
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'relevance', label: 'Relevance' },
+  { key: 'rating',    label: 'Top Rated'  },
+  { key: 'newest',    label: 'Newest'     },
+  { key: 'popular',   label: 'Popular'    },
+  { key: 'title',     label: 'A → Z'      },
+];
+
+/* ── Category emoji map ────────────────────────────────────── */
+const CAT_EMOJI: Record<string, string> = {
+  Romance: '💕', Fantasy: '🐉', Horror: '👻', Historical: '🏛️',
+  Biography: '👤', Science: '🔬', 'Self-Help': '🧘', Psychology: '🧠',
+  Design: '🎨', Fiction: '📖', Wellness: '🌿', Novel: '📕',
+  Poetry: '🎭', Spiritual: '🙏', History: '📜', 'Short Stories': '📝',
+};
+
+/* ── Search result card ────────────────────────────────────── */
+function SearchBookCard({ book, userId }: { book: Book; userId?: string }) {
+  const navigate = useNavigate();
+  const { isInWishlist, toggleWishlist } = useBooksStore();
+  const [wlLoading, setWlLoading] = useState(false);
+  const active = isInWishlist(book.id);
+
+  const handleWishlist = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!userId || wlLoading) return;
+    setWlLoading(true);
+    try { await toggleWishlist(userId, book.id); }
+    finally { setWlLoading(false); }
+  };
+
+  return (
+    <div className="ep-book-card" onClick={() => navigate(`/book/${book.id}`)}>
+      {/* 3D book cover */}
+      <div className="ep-book-cover-wrap">
+        <BookCover book={book} className="ep-book-cover" />
+      </div>
+
+      {/* Info */}
+      <div className="ep-book-info">
+        <div className="ep-book-meta">
+          <span className="ep-book-category">{book.category}</span>
+          {book.is_free && <span className="ep-badge ep-badge--free">Free</span>}
+          {!book.is_free && <span className="ep-badge ep-badge--premium">Premium</span>}
+        </div>
+        <div className="ep-book-title">{book.title}</div>
+        <div className="ep-book-author">by {book.author_name}</div>
+        {book.average_rating > 0 && (
+          <div className="ep-book-rating">
+            <svg viewBox="0 0 24 24" fill="#F5A623" width="12" height="12">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <span>{book.average_rating.toFixed(1)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* heart */}
+      <button
+        className={`ep-heart${active ? ' ep-heart--active' : ''}`}
+        onClick={handleWishlist}
+        disabled={wlLoading || !userId}
+        aria-label="Wishlist"
+      >
+        <svg viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/* ── Main ExplorePage ──────────────────────────────────────── */
 export default function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { books, booksLoading, booksError, loadBooks } = useBooksStore();
+  const { books, booksLoading, loadBooks } = useBooksStore();
+  const { profile } = useAuthStore();
+  const userId = profile?.supabase_uid;
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const initialCategory = searchParams.get('category') ?? null;
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '');
-  const [activeCategory, setActiveCategory] = useState<string | null>(initialCategory);
+  const [query,      setQuery ]     = useState(searchParams.get('q') ?? '');
+  const [category,   setCategory]   = useState(searchParams.get('cat') ?? '');
+  const [sortKey,    setSortKey]     = useState<SortKey>('relevance');
+  const [showFree,   setShowFree]    = useState(false);
+  const [minRating,  setMinRating]   = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    if (books.length === 0 && !booksLoading) {
-      loadBooks();
-    }
+    if (books.length === 0 && !booksLoading) loadBooks();
   }, []);
 
-  // Update URL params when filters change
+  // Sync URL params
   useEffect(() => {
-    const params: Record<string, string> = {};
-    if (searchQuery) params.q = searchQuery;
-    if (activeCategory) params.category = activeCategory;
-    setSearchParams(params, { replace: true });
-  }, [searchQuery, activeCategory]);
+    const p: Record<string, string> = {};
+    if (query)    p.q   = query;
+    if (category) p.cat = category;
+    setSearchParams(p, { replace: true });
+  }, [query, category]);
 
-  // Client-side filter (fast, works offline)
-  const filteredBooks = useMemo(() => {
-    let result = books;
-    if (activeCategory) result = result.filter((b) => b.category === activeCategory);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (b) =>
+  /* Unique categories ─────────────────────────────────── */
+  const categories = useMemo(
+    () => ['', ...[...new Set(books.map(b => b.category))].sort()],
+    [books]
+  );
+
+  /* Filter + Sort ─────────────────────────────────────── */
+  const results = useMemo(() => {
+    let list = [...books];
+
+    // category filter
+    if (category) list = list.filter(b => b.category === category);
+
+    // free filter
+    if (showFree) list = list.filter(b => b.is_free);
+
+    // min rating filter
+    if (minRating > 0) list = list.filter(b => b.average_rating >= minRating);
+
+    // text search
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter(
+        b =>
           b.title.toLowerCase().includes(q) ||
           (b.author_name ?? '').toLowerCase().includes(q) ||
           b.category.toLowerCase().includes(q) ||
-          b.tags.some((t) => t.toLowerCase().includes(q))
+          (b.description ?? '').toLowerCase().includes(q) ||
+          b.tags.some(t => t.toLowerCase().includes(q))
       );
     }
-    return result;
-  }, [books, searchQuery, activeCategory]);
 
-  const categories = [...new Set(books.map((b) => b.category))].sort();
+    // sort
+    switch (sortKey) {
+      case 'rating':  list.sort((a, b) => b.average_rating - a.average_rating); break;
+      case 'newest':  list.sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()); break;
+      case 'popular': list.sort((a, b) => b.purchase_count - a.purchase_count); break;
+      case 'title':   list.sort((a, b) => a.title.localeCompare(b.title)); break;
+    }
 
-  const groupedByCategory = useMemo(() => {
-    if (activeCategory || searchQuery) return null;
-    const groups: Record<string, typeof books> = {};
-    books.forEach((book) => {
-      if (!groups[book.category]) groups[book.category] = [];
-      groups[book.category].push(book);
-    });
-    return groups;
-  }, [books, activeCategory, searchQuery]);
+    return list;
+  }, [books, query, category, showFree, minRating, sortKey]);
+
+  const isFiltered = query || category || showFree || minRating > 0;
+  const activeFilterCount = [category, showFree, minRating > 0].filter(Boolean).length;
 
   return (
-    <div className="page">
-      {/* Search bar */}
-      <div className="search-container">
-        <div className="search-bar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <div className="ep-page">
+
+      {/* ── Search bar ─────────────────────────────────── */}
+      <div className="ep-search-wrap">
+        <div className="ep-search-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ep-search-icon">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
+            ref={inputRef}
             id="search-input"
             type="text"
+            className="ep-search-input"
             placeholder="Search books, authors, genres..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            autoFocus={!!searchParams.get('q')}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            autoComplete="off"
           />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} style={{ color: 'var(--color-gray-500)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+          {query && (
+            <button className="ep-search-clear" onClick={() => { setQuery(''); inputRef.current?.focus(); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           )}
         </div>
+
+        {/* Filter toggle */}
+        <button
+          className={`ep-filter-btn${activeFilterCount > 0 ? ' ep-filter-btn--active' : ''}`}
+          onClick={() => setShowFilters(v => !v)}
+          aria-label="Filters"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+            <line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="11" y1="18" x2="13" y2="18" />
+          </svg>
+          {activeFilterCount > 0 && <span className="ep-filter-badge">{activeFilterCount}</span>}
+        </button>
       </div>
 
-      {/* Category filter pills */}
-      {!booksLoading && categories.length > 0 && (
-        <div className="category-pills" style={{ marginBottom: 'var(--space-xl)' }}>
+      {/* ── Sort pills ─────────────────────────────────── */}
+      <div className="ep-sort-row">
+        {SORT_OPTIONS.map(opt => (
           <button
-            className={`category-pill ${!activeCategory ? 'active' : ''}`}
-            onClick={() => setActiveCategory(null)}
+            key={opt.key}
+            className={`ep-sort-pill${sortKey === opt.key ? ' ep-sort-pill--active' : ''}`}
+            onClick={() => setSortKey(opt.key)}
           >
-            <span className="category-pill-icon">📚</span>
-            <span className="category-pill-name">All</span>
+            {opt.label}
           </button>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              className={`category-pill ${activeCategory === cat ? 'active' : ''}`}
-              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-            >
-              <span className="category-pill-name">{cat}</span>
-            </button>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
 
-      {/* Loading state */}
-      {booksLoading && (
-        <div className="explore-loading">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="book-card-skeleton" />
-          ))}
-        </div>
-      )}
-
-      {/* Error state */}
-      {booksError && (
-        <div className="empty-state">
-          <div className="empty-state-icon">⚠️</div>
-          <h3>Couldn't load books</h3>
-          <p>{booksError}</p>
-          <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => loadBooks()}>
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Filtered / search results */}
-      {!booksLoading && !booksError && (activeCategory || searchQuery) && (
-        <div className="explore-section animate-fade-in">
-          <div className="section-header">
-            <h2>
-              {activeCategory ?? 'Search Results'}
-              {searchQuery && ` — "${searchQuery}"`}
-            </h2>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {filteredBooks.length} book{filteredBooks.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          {filteredBooks.length > 0 ? (
-            <div className="explore-grid">
-              {filteredBooks.map((book, i) => (
-                <div key={book.id} className={`animate-fade-in-up stagger-${Math.min(i + 1, 8)}`}>
-                  <BookCard book={book} />
-                </div>
+      {/* ── Filter panel ───────────────────────────────── */}
+      {showFilters && (
+        <div className="ep-filter-panel">
+          {/* Category */}
+          <div className="ep-filter-group">
+            <div className="ep-filter-label">Genre</div>
+            <div className="ep-cat-grid">
+              {categories.map(cat => (
+                <button
+                  key={cat || 'all'}
+                  className={`ep-cat-pill${category === cat ? ' ep-cat-pill--active' : ''}`}
+                  onClick={() => setCategory(cat)}
+                >
+                  {cat ? (CAT_EMOJI[cat] ?? '📖') + ' ' + cat : '📚 All'}
+                </button>
               ))}
             </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-state-icon">🔍</div>
-              <h3>No books found</h3>
-              <p>Try adjusting your search or browse different categories</p>
+          </div>
+
+          {/* Availability */}
+          <div className="ep-filter-group">
+            <div className="ep-filter-label">Availability</div>
+            <div className="ep-toggle-row">
+              <button
+                className={`ep-toggle${showFree ? ' ep-toggle--active' : ''}`}
+                onClick={() => setShowFree(v => !v)}
+              >
+                🆓 Free only
+              </button>
             </div>
+          </div>
+
+          {/* Min rating */}
+          <div className="ep-filter-group">
+            <div className="ep-filter-label">Minimum Rating</div>
+            <div className="ep-rating-row">
+              {[0, 3, 3.5, 4, 4.5].map(r => (
+                <button
+                  key={r}
+                  className={`ep-rating-pill${minRating === r ? ' ep-rating-pill--active' : ''}`}
+                  onClick={() => setMinRating(r)}
+                >
+                  {r === 0 ? 'Any' : `${r}★+`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Clear filters */}
+          {activeFilterCount > 0 && (
+            <button
+              className="ep-clear-filters"
+              onClick={() => { setCategory(''); setShowFree(false); setMinRating(0); }}
+            >
+              Clear all filters
+            </button>
           )}
         </div>
       )}
 
-      {/* Browse by category (default view) */}
-      {!booksLoading && !booksError && !activeCategory && !searchQuery && groupedByCategory && (
-        Object.entries(groupedByCategory).map(([category, categoryBooks]) => (
-          <div key={category} className="explore-section animate-fade-in-up">
-            <div className="section-header">
-              <h2>{category}</h2>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                {categoryBooks.length} book{categoryBooks.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="recommendation-scroll">
-              {categoryBooks.map((book) => <BookCard key={book.id} book={book} />)}
-            </div>
-          </div>
-        ))
-      )}
-
-      {/* No books at all */}
-      {!booksLoading && !booksError && books.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-state-icon">📖</div>
-          <h3>No books published yet</h3>
-          <p>Check back soon for new stories from Mizo authors!</p>
+      {/* ── Results header ─────────────────────────────── */}
+      {!booksLoading && (
+        <div className="ep-results-header">
+          {isFiltered ? (
+            <>
+              <span className="ep-results-count">{results.length} result{results.length !== 1 ? 's' : ''}</span>
+              {query && <span className="ep-results-query">for "{query}"</span>}
+            </>
+          ) : (
+            <span className="ep-results-count">{results.length} books available</span>
+          )}
         </div>
       )}
+
+      {/* ── Loading ────────────────────────────────────── */}
+      {booksLoading && (
+        <div className="ep-skeleton-list">
+          {[...Array(6)].map((_, i) => <div key={i} className="ep-skeleton-card" />)}
+        </div>
+      )}
+
+      {/* ── Results list ───────────────────────────────── */}
+      {!booksLoading && results.length > 0 && (
+        <div className="ep-results-list">
+          {results.map(book => (
+            <SearchBookCard key={book.id} book={book} userId={userId} />
+          ))}
+        </div>
+      )}
+
+      {/* ── No results ─────────────────────────────────── */}
+      {!booksLoading && results.length === 0 && (
+        <div className="ep-empty">
+          <div style={{ fontSize: '2.5rem' }}>🔍</div>
+          <h3>No books found</h3>
+          <p>Try a different search or clear your filters.</p>
+          {isFiltered && (
+            <button
+              className="ep-clear-filters"
+              style={{ marginTop: 12 }}
+              onClick={() => { setQuery(''); setCategory(''); setShowFree(false); setMinRating(0); }}
+            >
+              Clear everything
+            </button>
+          )}
+        </div>
+      )}
+
+      <div style={{ height: 24 }} />
     </div>
   );
 }

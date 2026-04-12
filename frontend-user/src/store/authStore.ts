@@ -12,10 +12,12 @@ export interface AppUserProfile {
   bio: string | null;
   role: 'USER' | 'AUTHOR' | 'ADMIN';
   is_active: boolean;
+  is_email_verified: boolean;
   following_count: number;
   followers_count: number;
   supabase_uid: string;
   created_at: string;
+  updated_at: string;
 }
 
 interface AuthState {

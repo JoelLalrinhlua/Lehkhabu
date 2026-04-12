@@ -153,7 +153,13 @@ export async function fetchUserShelf(userId: string, shelf?: ShelfEntry['shelf']
       books (
         id, title, author_id, category, cover_image_url,
         cover_color_primary, cover_color_secondary, average_rating,
-        price, is_free, total_pages, status
+        price, is_free, total_pages, status, slug, description,
+        language, tags, rating_count, purchase_count,
+        cover_color_secondary, published_at, created_at,
+        author_profiles (
+          pen_name,
+          users (full_name, username)
+        )
       )
     `)
     .eq('user_id', userId)
@@ -163,8 +169,21 @@ export async function fetchUserShelf(userId: string, shelf?: ShelfEntry['shelf']
 
   const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+
+  // Normalize author_name inside shelf book entries
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  return rows.map((row) => {
+    const book = row.books as Record<string, unknown> | null;
+    if (book) {
+      const ap = book.author_profiles as Record<string, unknown> | null;
+      const u  = ap?.users as Record<string, unknown> | null;
+      (book as Record<string, unknown>).author_name =
+        ap?.pen_name ?? u?.full_name ?? u?.username ?? 'Unknown Author';
+    }
+    return row;
+  });
 }
+
 
 /** Add a book to a user's shelf (or move between shelves) */
 export async function upsertShelfEntry(

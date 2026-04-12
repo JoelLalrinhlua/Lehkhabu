@@ -175,7 +175,19 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
             </div>
           )}
         </div>
-        <button className="btn btn-ghost btn-sm" id="topbar-signout-btn" style={{ gap: 6 }}>
+        <button 
+          className="btn btn-ghost btn-sm" 
+          id="topbar-signout-btn" 
+          style={{ gap: 6 }}
+          onClick={() => {
+            // Since admin and user apps are currently running on different ports locally
+            // We'll redirect to the user's auth page. In production, adjust the URL.
+            const currUrl = new URL(window.location.href);
+            currUrl.port = '5173';
+            currUrl.pathname = '/auth';
+            window.location.href = currUrl.toString();
+          }}
+        >
           <LogOut size={15} />
           <span className="hide-mobile">Sign out</span>
         </button>

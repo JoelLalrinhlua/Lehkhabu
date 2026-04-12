@@ -15,11 +15,21 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
 
-    # ── Database (local PostgreSQL via asyncpg) ──────
+    # ── Database ─────────────────────────────────────
+    # Async URL (asyncpg) — used by FastAPI at runtime
     DATABASE_URL: str = "postgresql+asyncpg://localhost/lehkhabu_dev"
-    # Sync URL for Alembic migrations
+
+    # Sync URL (psycopg2) — used by Alembic for migrations.
+    # Set this explicitly in .env to point to Supabase connection pooler
+    # (port 6543, Session mode) which supports psycopg2.
+    # If not set, derived automatically from DATABASE_URL.
+    SYNC_DATABASE_URL_OVERRIDE: str = ""
+
     @property
     def SYNC_DATABASE_URL(self) -> str:
+        if self.SYNC_DATABASE_URL_OVERRIDE:
+            return self.SYNC_DATABASE_URL_OVERRIDE
+        # Derive: swap asyncpg driver to psycopg2
         return self.DATABASE_URL.replace(
             "postgresql+asyncpg://", "postgresql+psycopg2://"
         )

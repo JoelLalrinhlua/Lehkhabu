@@ -684,3 +684,37 @@ tbody td {
 @media (min-width: 769px) {
   .hide-desktop { display: none !important; }
 }
+
+/* ── Features BG Upload Zone ───────────────────────────── */
+.features-bg-upload-zone {
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--dur-normal) var(--ease-smooth);
+  background: var(--bg-surface);
+  position: relative;
+  overflow: hidden;
+}
+.features-bg-upload-zone:hover {
+  border-color: var(--color-gold);
+  background: var(--color-gold-dim);
+}
+.features-bg-preview {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
+/* ── Notification dot ──────────────────────────────────── */
+.notification-btn { position: relative; }
+.notif-dot {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--color-red);
+  border: 2px solid var(--bg-card);
+}

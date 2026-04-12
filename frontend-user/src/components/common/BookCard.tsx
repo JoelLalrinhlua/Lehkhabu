@@ -15,8 +15,17 @@ export default function BookCard({ book, showRating = true, large = false }: Boo
   const authorText = book.author_name ?? book.author ?? '';
 
   return (
-    <div className={`book-card ${large ? 'book-card-lg' : ''}`} onClick={() => navigate(`/book/${book.id}`)}>
-      <BookCover book={book} className={`book-card-cover ${large ? 'book-card-cover-lg' : ''}`} />
+    <div
+      className={`book-card ${large ? 'book-card-lg' : ''}`}
+      onClick={() => navigate(`/book/${book.id}`)}
+      role="button"
+      tabIndex={0}
+      aria-label={`View ${book.title}`}
+      onKeyDown={(e) => e.key === 'Enter' && navigate(`/book/${book.id}`)}
+    >
+      <div className={`book-card-cover-wrap ${large ? 'book-card-cover-wrap-lg' : ''}`}>
+        <BookCover book={book} className={`book-card-cover ${large ? 'book-card-cover-lg' : ''}`} />
+      </div>
       <div className="book-card-title">{book.title}</div>
       {authorText && <div className="book-card-author">{authorText}</div>}
       {showRating && rating > 0 && (

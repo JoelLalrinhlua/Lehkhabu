@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Save, Eye, EyeOff, Sliders, Layout, Type, Palette, Bell, Shield } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Save, Eye, EyeOff, Sliders, Layout, Type, Palette, Bell, Shield, ImageIcon, Upload } from 'lucide-react';
 import { defaultUISettings } from '../../store/mockData';
 import type { UISettings } from '../../types';
 import { useToast } from '../../components/layout/AdminLayout';
+import { uploadFeaturesBg, fetchAppSettings } from '../../services/settings.service';
+import type { AppSettings } from '../../services/settings.service';
 
 // ── Toggle Row ──────────────────────────────────────────────────
 function ToggleRow({
@@ -72,12 +74,52 @@ export default function UISettingsPage() {
   const [settings, setSettings] = useState<UISettings>(defaultUISettings);
   const [previewMode, setPreviewMode] = useState(false);
 
+  // Features BG state
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [bgUploading, setBgUploading] = useState(false);
+  const [bgPreviewUrl, setBgPreviewUrl] = useState<string | null>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing app settings on mount
+  useEffect(() => {
+    fetchAppSettings()
+      .then((s) => {
+        setAppSettings(s);
+        setBgPreviewUrl(s.features_bg_image_url);
+      })
+      .catch(console.error);
+  }, []);
+
   function update<K extends keyof UISettings>(key: K, value: UISettings[K]) {
     setSettings(prev => ({ ...prev, [key]: value }));
   }
 
   function save() {
     addToast('UI settings saved and applied to user frontend!', 'success');
+  }
+
+  async function handleBgUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBgUploading(true);
+    try {
+      // Show local preview immediately
+      const localUrl = URL.createObjectURL(file);
+      setBgPreviewUrl(localUrl);
+
+      const publicUrl = await uploadFeaturesBg(file);
+      setBgPreviewUrl(publicUrl);
+      setAppSettings(prev => prev ? { ...prev, features_bg_image_url: publicUrl } : prev);
+      addToast('Features background image updated successfully!', 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Upload failed.', 'error');
+      // Revert preview on error
+      setBgPreviewUrl(appSettings?.features_bg_image_url ?? null);
+    } finally {
+      setBgUploading(false);
+      if (bgInputRef.current) bgInputRef.current.value = '';
+    }
   }
 
   return (
@@ -139,8 +181,62 @@ export default function UISettingsPage() {
 
       <div style={{ display: 'grid', gap: 'var(--space-md)' }}>
 
-        {/* Hero & Branding */}
+        {/* Features Background Image */}
         <div className="section-card animate-fade-in-up stagger-1">
+          <SectionHead icon={ImageIcon} title="Features Section Background" sub="Upload an image with overlay for the Featured Books section" />
+          <div style={{ padding: 'var(--space-lg)' }}>
+            <div
+              className="features-bg-upload-zone"
+              onClick={() => !bgUploading && bgInputRef.current?.click()}
+              style={{ cursor: bgUploading ? 'not-allowed' : 'pointer' }}
+              id="features-bg-drop-zone"
+            >
+              <input
+                ref={bgInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleBgUpload}
+                style={{ display: 'none' }}
+                disabled={bgUploading}
+              />
+              {bgUploading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', color: 'var(--color-gold)' }}>
+                  <div style={{ width: 18, height: 18, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  Uploading and compressing…
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--text-muted)' }}>
+                  <Upload size={28} />
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {bgPreviewUrl ? 'Click to replace image' : 'Click to upload background image'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem' }}>JPEG, PNG or WebP · Max 20MB · Will be compressed to WebP</div>
+                </div>
+              )}
+            </div>
+            {bgPreviewUrl && (
+              <div style={{ marginTop: 'var(--space-md)', position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                <img src={bgPreviewUrl} alt="Features background preview" className="features-bg-preview" />
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'rgba(26,26,26,0.55)',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
+                    Preview with overlay
+                  </span>
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: 'var(--space-sm)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              The image is automatically compressed and cached. Changes appear on the user app immediately.
+            </div>
+          </div>
+        </div>
+
+        {/* Hero & Branding */}
+        <div className="section-card animate-fade-in-up stagger-2">
           <SectionHead icon={Type} title="Hero & Branding" sub="Control the main landing text and featured section labels" />
           <div style={{ padding: '0 var(--space-lg)' }}>
             <InputRow id="hero-text" label="Hero Tagline" description="Main headline shown on the home screen"
