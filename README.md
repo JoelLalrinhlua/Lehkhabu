@@ -10,4 +10,6 @@ AI-powered book marketplace.
 - `shared`: Shared TypeScript types.
 
 ## Development
-Run `make dev` to start all services.
+File Download la
+frontend-admin leh frontend-user a hran in dependencies install la (npm install)
+chuan a hran in run rawh (npm run dev).
