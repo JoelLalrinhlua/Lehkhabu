@@ -959,13 +959,24 @@
 
 .shelf-scroll {
   display: flex;
-  gap: var(--space-md);
+  gap: var(--space-xl);
   overflow-x: auto;
-  padding: var(--space-sm) 0 var(--space-md);
+  padding: var(--space-lg) var(--space-lg) 0 var(--space-lg);
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -ms-overflow-style: none;
   scrollbar-width: none;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 12px solid rgba(210, 180, 140, 0.6); /* Wood-like tone */
+  border-radius: 4px 4px 2px 2px;
+  box-shadow: 0 15px 20px -5px rgba(0, 0, 0, 0.1), inset 0 -4px 10px rgba(0,0,0,0.05);
+  margin: 0 calc(var(--space-md) * -1); /* Full bleed visually */
+}
+
+@media (min-width: 769px) {
+  .shelf-scroll { margin: 0; border-left: 2px solid rgba(255,255,255,0.4); border-right: 2px solid rgba(255,255,255,0.4); }
 }
 
 .shelf-scroll::-webkit-scrollbar {
@@ -977,10 +988,23 @@
   scroll-snap-align: start;
   cursor: pointer;
   transition: transform var(--duration-normal) var(--ease-smooth);
+  margin-bottom: 4px; /* Rest on the shelf */
+  position: relative;
+}
+
+.shelf-book::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 10%; right: 10%;
+  height: 4px;
+  background: rgba(0,0,0,0.15);
+  filter: blur(2px);
+  z-index: -1;
 }
 
 .shelf-book:hover {
-  transform: scale(1.05);
+  transform: translateY(-8px) scale(1.02);
 }
 
 .shelf-book-cover {
@@ -4065,17 +4089,16 @@
   height: 128px !important;
   border-radius: 6px 4px 4px 6px !important;
   object-fit: cover;
-  /* Lean RIGHT: left side is anchor, right side angles back */
-  transform: perspective(300px) rotateY(22deg);
-  transform-origin: left center;
+  /* Flat look requested by user */
+  transform: none;
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 6px 8px 24px rgba(0,0,0,0.28), 2px 2px 6px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.08);
   will-change: transform;
   display: block;
 }
 .hb-hero-book-wrap:hover .hb-hero-cover {
-  transform: perspective(300px) rotateY(0deg) translateY(-6px);
-  box-shadow: 0 14px 32px rgba(0,0,0,0.22);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.20);
 }
 
 .hb-hero-skeleton {
@@ -4449,7 +4472,7 @@
 
 .hb-strip-card {
   flex-shrink: 0;
-  width: 96px;
+  width: 110px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -4460,13 +4483,13 @@
 
 .hb-strip-cover-wrap {
   position: relative;
-  width: 96px;
-  height: 136px;
-  perspective: 350px;
+  width: 110px;
+  height: 156px;
+  perspective: 400px;
 }
 .hb-strip-cover {
-  width: 96px !important;
-  height: 136px !important;
+  width: 110px !important;
+  height: 156px !important;
   border-radius: 6px 3px 3px 6px !important;
   display: block;
   /* Same right-lean trapezoid */
@@ -4505,6 +4528,33 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Desktop sizes for Book Strip ─────────────────────────── */
+@media (min-width: 769px) {
+  .hb-strip {
+    gap: 20px;
+    padding: 12px 6px 16px;
+  }
+  .hb-strip-card {
+    width: 160px;
+  }
+  .hb-strip-cover-wrap {
+    width: 160px;
+    height: 230px;
+    perspective: 500px;
+  }
+  .hb-strip-cover {
+    width: 160px !important;
+    height: 230px !important;
+  }
+  .hb-strip-title {
+    font-size: 0.9rem;
+    margin-top: 4px;
+  }
+  .hb-strip-author {
+    font-size: 0.8rem;
+  }
 }
 
 /* ── Continue Reading progress label ─────────────────────── */

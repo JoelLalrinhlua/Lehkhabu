@@ -200,6 +200,22 @@ export default function ProfilePage() {
           )}
         </div>
 
+        {/* ── Wallet / Credits ───────────────────────────────── */}
+        <div className="profile-section">
+            <div className="action-card" style={{ background: 'linear-gradient(135deg, #2C3E50 0%, #3498DB 100%)', color: 'white', border: 'none' }}>
+              <div className="action-card-content" style={{ padding: '24px' }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: '0.9rem', fontWeight: 600, opacity: 0.9, marginBottom: '8px', color: 'white' }}>Lehkhabu Wallet</h3>
+                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-heading)', color: 'white' }}>₹0.00</div>
+                  <button style={{ marginTop: '16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.4)', color: 'white', padding: '8px 20px', borderRadius: '24px', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', backdropFilter: 'blur(4px)' }}>
+                    + Add Funds
+                  </button>
+                </div>
+                <div style={{ fontSize: '3.5rem', opacity: 0.8, filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.2))' }}>💳</div>
+              </div>
+            </div>
+        </div>
+
         {/* ── Settings Menu ──────────────────────────────────── */}
         <div className="profile-menu-group">
           <h2 className="menu-group-title">Settings</h2>
@@ -268,6 +284,38 @@ export default function ProfilePage() {
               </div>
             </div>
             
+          </div>
+        </div>
+
+        {/* ── Achievements & Badges ─────────────────────────── */}
+        <div className="profile-menu-group">
+          <h2 className="menu-group-title">Achievements</h2>
+          <div className="menu-list" style={{ padding: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap', background: 'var(--color-white)' }}>
+            
+            <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(243, 156, 18, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '80px', border: '1px solid rgba(243, 156, 18, 0.2)', boxShadow: '0 4px 10px rgba(243, 156, 18, 0.05)', transition: 'transform 0.2s' }}>
+              <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(243, 156, 18, 0.3))' }}>🌟</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#B9770E', textAlign: 'center', fontFamily: 'var(--font-heading)' }}>Early Adopter</span>
+            </div>
+
+            {readCount >= 1 && (
+              <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(46, 204, 113, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '80px', border: '1px solid rgba(46, 204, 113, 0.2)', boxShadow: '0 4px 10px rgba(46, 204, 113, 0.05)', transition: 'transform 0.2s' }}>
+                <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(46, 204, 113, 0.3))' }}>📚</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1E8449', textAlign: 'center', fontFamily: 'var(--font-heading)' }}>First Book</span>
+              </div>
+            )}
+
+            {isAuthor && (
+               <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(142, 68, 173, 0.15), rgba(142, 68, 173, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '80px', border: '1px solid rgba(142, 68, 173, 0.2)', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.05)', transition: 'transform 0.2s' }}>
+                 <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(142, 68, 173, 0.3))' }}>✍️</span>
+                 <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6C3483', textAlign: 'center', fontFamily: 'var(--font-heading)' }}>Author</span>
+               </div>
+            )}
+            
+            <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(52, 152, 219, 0.15), rgba(52, 152, 219, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '100px', border: '1px solid rgba(52, 152, 219, 0.2)', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.05)', transition: 'transform 0.2s' }}>
+              <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(52, 152, 219, 0.3))' }}>📅</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#21618C', textAlign: 'center', fontFamily: 'var(--font-heading)', lineHeight: 1.2 }}>Member Since<br/>{new Date(profile.created_at).getFullYear()}</span>
+            </div>
+
           </div>
         </div>
 

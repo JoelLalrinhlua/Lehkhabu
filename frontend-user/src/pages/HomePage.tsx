@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useBooksStore } from '../store/booksStore';
@@ -68,12 +68,84 @@ function GridBookCard({ book, userId }: { book: Book; userId: string | undefined
 }
 
 /* ── Horizontal scroll book strip ───────────────────────── */
-function BookStrip({ books, userId }: { books: Book[]; userId: string | undefined }) {
+function BookStrip({ books, userId, autoScrollDelay = 0 }: { books: Book[]; userId: string | undefined; autoScrollDelay?: number }) {
   const navigate = useNavigate();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const [isDown, setIsDown] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      const interval = setInterval(() => {
+        if (!isDown && scrollRef.current) {
+          scrollRef.current.scrollBy({ left: 180, behavior: 'smooth' });
+        }
+      }, 8000);
+      return () => clearInterval(interval);
+    }, autoScrollDelay);
+    
+    return () => clearTimeout(timeout);
+  }, [isDown, autoScrollDelay]);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (!scrollRef.current) return;
+    setIsDown(true);
+    setIsDragging(false);
+    setStartX(e.pageX - scrollRef.current.offsetLeft);
+    setScrollLeft(scrollRef.current.scrollLeft);
+  };
+  
+  const onMouseLeave = () => {
+    setIsDown(false);
+    setIsDragging(false);
+  };
+  
+  const onMouseUp = () => {
+    setIsDown(false);
+    setTimeout(() => setIsDragging(false), 50);
+  };
+  
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDown || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const multiplier = window.innerWidth > 768 ? 3.5 : 2;
+    const walk = (x - startX) * multiplier; 
+    if (Math.abs(walk) > 5) {
+      setIsDragging(true);
+    }
+    scrollRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleCardClick = (e: React.MouseEvent, bookId: string) => {
+    if (isDragging) {
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    navigate(`/book/${bookId}`);
+  };
+
+  const displayBooks = Array(30).fill(books).flat();
+
   return (
-    <div className="hb-strip">
-      {books.map((book) => (
-        <div key={book.id} className="hb-strip-card" onClick={() => navigate(`/book/${book.id}`)}>
+    <div 
+      className="hb-strip"
+      ref={scrollRef}
+      onMouseDown={onMouseDown}
+      onMouseLeave={onMouseLeave}
+      onMouseUp={onMouseUp}
+      onMouseMove={onMouseMove}
+      style={{ 
+        cursor: isDown ? 'grabbing' : 'grab',
+        scrollBehavior: isDown ? 'auto' : 'smooth' 
+      }}
+    >
+      {displayBooks.map((book, idx) => (
+        <div key={`${book.id}-${idx}`} className="hb-strip-card" onClick={(e) => handleCardClick(e, book.id)}>
           <div className="hb-strip-cover-wrap">
             <BookCover book={book} className="hb-strip-cover" />
             <div className="hb-strip-heart-wrap">
@@ -136,21 +208,38 @@ export default function HomePage() {
   const userId = profile?.supabase_uid;
   const firstName = profile?.full_name?.split(' ')[0] ?? profile?.username ?? 'Reader';
 
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (books.length === 0 && !booksLoading) loadBooks();
   }, []);
 
-  /* Derived data ─────────────────────────────────────── */
-  // Hero: top-rated book
-  const heroBook = [...books].sort((a, b) => b.average_rating - a.average_rating)[0];
+  const toggleSection = (key: string) => {
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
-  // Recommended: rotate through books offset from hero
-  const recommended = books.filter(b => b.id !== heroBook?.id).slice(0, 10);
+  /* Derived data ─────────────────────────────────────── */
+  // Hero: top-rated books carousel
+  const topBooks = [...books].sort((a, b) => b.average_rating - a.average_rating).slice(0, 5);
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  useEffect(() => {
+    if (topBooks.length === 0) return;
+    const interval = setInterval(() => {
+      setHeroIndex(prev => (prev + 1) % topBooks.length);
+    }, 6000); // changes every 6 seconds
+    return () => clearInterval(interval);
+  }, [topBooks.length]);
+
+  const heroBook = topBooks[heroIndex];
+
+  // Recommended: offset from top 5
+  const recommended = books.filter(b => !topBooks.find(tb => tb.id === b.id)).slice(0, 10);
 
   // Popular: by purchase count
   const popular = [...books]
     .sort((a, b) => b.purchase_count - a.purchase_count)
-    .filter(b => b.id !== heroBook?.id)
+    .filter(b => !topBooks.find(tb => tb.id === b.id))
     .slice(0, 6);
 
   // Currently Reading
@@ -164,14 +253,20 @@ export default function HomePage() {
   /* Section header helper ────────────────────────────── */
   const SectionHeader = ({
     title,
-    onSeeAll,
+    sectionKey,
+    isExpanded
   }: {
     title: string;
-    onSeeAll?: () => void;
+    sectionKey?: string;
+    isExpanded?: boolean;
   }) => (
     <div className="hb-section-header">
       <span>{title}</span>
-      {onSeeAll && <button onClick={onSeeAll}>See all</button>}
+      {sectionKey && (
+        <button onClick={() => toggleSection(sectionKey)}>
+          {isExpanded ? 'Collapse' : 'View more'}
+        </button>
+      )}
     </div>
   );
 
@@ -190,7 +285,12 @@ export default function HomePage() {
       {booksLoading ? (
         <div className="hb-hero-skeleton" />
       ) : heroBook ? (
-        <div className="hb-hero-card" onClick={() => navigate(`/book/${heroBook.id}`)}>
+        <div 
+           key={heroBook.id} 
+           className="hb-hero-card" 
+           onClick={() => navigate(`/book/${heroBook.id}`)}
+           style={{ animation: 'fadeIn 0.5s ease' }}
+        >
           <div className="hb-hero-info">
             <div className="hb-hero-badge">🔥 Popular Right Now</div>
             <h2 className="hb-hero-title">{heroBook.title}</h2>
@@ -223,10 +323,24 @@ export default function HomePage() {
         </div>
       ) : null}
 
+      {/* ── Recommended for You ──────────────────────────── */}
+      {!booksLoading && recommended.length > 0 && (
+        <div style={{ animation: 'fadeInUp 0.6s ease both', animationDelay: '0.1s' }}>
+          <SectionHeader title="Recommended for You ✨" sectionKey="recommended" isExpanded={expandedSections['recommended']} />
+          {expandedSections['recommended'] ? (
+            <div className="hb-grid">
+               {recommended.map(book => <GridBookCard key={book.id} book={book} userId={userId} />)}
+            </div>
+          ) : (
+            <BookStrip books={recommended.slice(0, 8)} userId={userId} autoScrollDelay={0} />
+          )}
+        </div>
+      )}
+
       {/* ── Continue Reading ─────────────────────────────── */}
       {readingEntries.length > 0 && (
-        <div className="hb-continue-section">
-          <SectionHeader title="Continue Reading 📖" onSeeAll={() => navigate('/library')} />
+        <div className="hb-continue-section" style={{ animation: 'fadeInUp 0.6s ease both', animationDelay: '0.3s' }}>
+          <SectionHeader title="Continue Reading 📖" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {readingEntries.map((entry) => {
               const book = entry.books as unknown as Book;
@@ -237,31 +351,31 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Recommended for You ──────────────────────────── */}
-      {!booksLoading && recommended.length > 0 && (
-        <div>
-          <SectionHeader title="Recommended for You ✨" onSeeAll={() => navigate('/explore')} />
-          <BookStrip books={recommended.slice(0, 8)} userId={userId} />
-        </div>
-      )}
-
       {/* ── Popular Books Grid ───────────────────────────── */}
       {!booksLoading && popular.length > 0 && (
-        <div>
-          <SectionHeader title="Popular This Week 🏆" onSeeAll={() => navigate('/explore')} />
-          <div className="hb-grid">
-            {popular.map((book) => (
-              <GridBookCard key={book.id} book={book} userId={userId} />
-            ))}
-          </div>
+        <div style={{ animation: 'fadeInUp 0.6s ease both', animationDelay: '0.5s' }}>
+          <SectionHeader title="Popular This Week 🏆" sectionKey="popular" isExpanded={expandedSections['popular']} />
+          {expandedSections['popular'] ? (
+            <div className="hb-grid">
+               {popular.map(book => <GridBookCard key={book.id} book={book} userId={userId} />)}
+            </div>
+          ) : (
+            <BookStrip books={popular} userId={userId} autoScrollDelay={2500} />
+          )}
         </div>
       )}
 
       {/* ── New Arrivals ─────────────────────────────────── */}
       {!booksLoading && newArrivals.length > 0 && (
-        <div>
-          <SectionHeader title="New Arrivals 🆕" onSeeAll={() => navigate('/explore')} />
-          <BookStrip books={newArrivals.slice(0, 8)} userId={userId} />
+        <div style={{ animation: 'fadeInUp 0.6s ease both', animationDelay: '0.7s' }}>
+          <SectionHeader title="New Arrivals 🆕" sectionKey="new-arrivals" isExpanded={expandedSections['new-arrivals']} />
+          {expandedSections['new-arrivals'] ? (
+            <div className="hb-grid">
+               {newArrivals.map(book => <GridBookCard key={book.id} book={book} userId={userId} />)}
+            </div>
+          ) : (
+            <BookStrip books={newArrivals.slice(0, 8)} userId={userId} autoScrollDelay={5000} />
+          )}
         </div>
       )}
 
