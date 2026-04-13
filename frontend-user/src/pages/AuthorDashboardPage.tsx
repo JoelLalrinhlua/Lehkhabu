@@ -1,49 +1,326 @@
-import { useState } from 'react';
-import { useUserStore } from '../store/userStore';
-import type { AuthorBookEntry } from '../store/userStore';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuthStore } from '../store/authStore';
+import {
+  fetchMyAuthorProfile,
+  fetchMyBooks,
+  createBook,
+  updateBook,
+  deleteBook,
+  uploadBookCover,
+  uploadBookFile,
+  type AuthorBook,
+} from '../services/author.service';
 
-const GENRES = ['Fiction', 'Non-Fiction', 'History', 'Religious', 'Poetry', 'Novel', 'Short Stories', 'Spiritual', 'Travel', 'Biography', 'Academic', 'Children'];
+const GENRES = [
+  'Fiction', 'Non-Fiction', 'History', 'Religious', 'Poetry',
+  'Novel', 'Short Stories', 'Spiritual', 'Travel', 'Biography', 'Academic', 'Children',
+];
 const LANGUAGES = ['Mizo', 'English', 'Hmar', 'Chakma', 'Hindi'];
+const COVER_GRADIENTS = [
+  { label: 'Amber', value: '#C17817', secondary: '#8B4513' },
+  { label: 'Ocean', value: '#4F8EF7', secondary: '#1E40AF' },
+  { label: 'Emerald', value: '#34D399', secondary: '#065F46' },
+  { label: 'Violet', value: '#A78BFA', secondary: '#5B21B6' },
+  { label: 'Sunset', value: '#FB923C', secondary: '#9A3412' },
+  { label: 'Cyan', value: '#22D3EE', secondary: '#0E7490' },
+  { label: 'Rose', value: '#F472B6', secondary: '#9D174D' },
+];
+const ACCEPTED_BOOK_FILES = '.pdf,.epub,.doc,.docx';
+const ACCEPTED_COVER_FILES = '.jpg,.jpeg,.png,.webp';
 
-const emptyBook = () => ({
+type ModalMode = 'create' | 'edit';
+
+interface BookFormState {
+  title: string;
+  description: string;
+  language: string;
+  category: string;
+  tags: string;
+  price: string;
+  isFree: boolean;
+  totalPages: string;
+  coverColorPrimary: string;
+  coverColorSecondary: string;
+}
+
+const emptyForm = (): BookFormState => ({
   title: '',
   description: '',
-  genre: '',
   language: '',
-  price: 99,
-  pages: 100,
+  category: '',
+  tags: '',
+  price: '99',
+  isFree: false,
+  totalPages: '',
+  coverColorPrimary: COVER_GRADIENTS[0].value,
+  coverColorSecondary: COVER_GRADIENTS[0].secondary,
 });
 
-export default function AuthorDashboardPage() {
-  const { authorBooks, publishBook } = useUserStore();
-  const [showPublish, setShowPublish] = useState(false);
-  const [form, setForm] = useState(emptyBook());
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [published, setPublished] = useState(false);
+function formatBookStatus(status: AuthorBook['status']) {
+  const map: Record<AuthorBook['status'], { label: string; cls: string }> = {
+    DRAFT:          { label: '✏️ Draft',          cls: 'status-draft' },
+    PENDING_REVIEW: { label: '⏳ Under Review',   cls: 'status-pending' },
+    PUBLISHED:      { label: '✅ Published',       cls: 'status-published' },
+    REJECTED:       { label: '❌ Rejected',        cls: 'status-rejected' },
+    ARCHIVED:       { label: '🗃 Archived',        cls: 'status-archived' },
+  };
+  return map[status] ?? { label: status, cls: '' };
+}
 
-  const totalRevenue = authorBooks.reduce((s, b) => s + b.revenue, 0);
-  const totalSales = authorBooks.reduce((s, b) => s + b.sales, 0);
-  const avgRating = authorBooks.length > 0
-    ? authorBooks.filter(b => b.rating > 0).reduce((s, b) => s + b.rating, 0) / (authorBooks.filter(b => b.rating > 0).length || 1)
+export default function AuthorDashboardPage() {
+  const { profile } = useAuthStore();
+
+  const [authorProfile, setAuthorProfile] = useState<{ id: string } | null>(null);
+  const [books, setBooks] = useState<AuthorBook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Publish/Edit Modal
+  const [modalMode, setModalMode] = useState<ModalMode>('create');
+  const [showModal, setShowModal] = useState(false);
+  const [editingBook, setEditingBook] = useState<AuthorBook | null>(null);
+  const [form, setForm] = useState<BookFormState>(emptyForm());
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // File uploads
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [bookFile, setBookFile] = useState<File | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingBook, setUploadingBook] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const bookFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const userId = profile?.id;
+
+  const loadData = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const ap = await fetchMyAuthorProfile(userId);
+      setAuthorProfile(ap);
+      if (ap) {
+        const bks = await fetchMyBooks(ap.id);
+        setBooks(bks);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Stats
+  const publishedBooks = books.filter((b) => b.status === 'PUBLISHED');
+  const totalViews = books.reduce((s, b) => s + (b.view_count ?? 0), 0);
+  const totalPurchases = books.reduce((s, b) => s + b.purchase_count, 0);
+  const avgRating = publishedBooks.length > 0
+    ? publishedBooks.filter((b) => b.average_rating > 0).reduce((s, b) => s + b.average_rating, 0)
+      / (publishedBooks.filter((b) => b.average_rating > 0).length || 1)
     : 0;
 
-  function validate() {
+  function openCreate() {
+    setModalMode('create');
+    setEditingBook(null);
+    setForm(emptyForm());
+    setCoverFile(null);
+    setCoverPreview(null);
+    setBookFile(null);
+    setFormErrors({});
+    setSubmitError(null);
+    setShowModal(true);
+  }
+
+  function openEdit(book: AuthorBook) {
+    setModalMode('edit');
+    setEditingBook(book);
+    setForm({
+      title: book.title,
+      description: book.description ?? '',
+      language: book.language,
+      category: book.category,
+      tags: book.tags.join(', '),
+      price: String(book.price),
+      isFree: book.is_free,
+      totalPages: book.total_pages ? String(book.total_pages) : '',
+      coverColorPrimary: book.cover_color_primary ?? COVER_GRADIENTS[0].value,
+      coverColorSecondary: book.cover_color_secondary ?? COVER_GRADIENTS[0].secondary,
+    });
+    setCoverFile(null);
+    setCoverPreview(book.cover_image_url);
+    setBookFile(null);
+    setFormErrors({});
+    setSubmitError(null);
+    setShowModal(true);
+  }
+
+  function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setFormErrors((p) => ({ ...p, cover: 'Cover image must be under 5 MB' }));
+      return;
+    }
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+    setFormErrors((p) => ({ ...p, cover: '' }));
+  }
+
+  function handleBookFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      setFormErrors((p) => ({ ...p, bookFile: 'Book file must be under 50 MB' }));
+      return;
+    }
+    setBookFile(file);
+    setFormErrors((p) => ({ ...p, bookFile: '' }));
+  }
+
+  function validateForm(): boolean {
     const e: Record<string, string> = {};
     if (!form.title.trim()) e.title = 'Title is required';
     if (!form.description.trim()) e.description = 'Description is required';
-    if (!form.genre) e.genre = 'Genre is required';
     if (!form.language) e.language = 'Language is required';
-    setErrors(e);
+    if (!form.category) e.category = 'Category is required';
+    const price = parseFloat(form.price);
+    if (!form.isFree && (isNaN(price) || price < 0)) e.price = 'Enter a valid price';
+    setFormErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  function handlePublish() {
-    if (!validate()) return;
-    publishBook(form);
-    setForm(emptyBook());
-    setShowPublish(false);
-    setPublished(true);
-    setTimeout(() => setPublished(false), 3000);
+  async function handleSave() {
+    if (!validateForm() || !authorProfile) return;
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      let coverImageUrl: string | undefined = editingBook?.cover_image_url ?? undefined;
+      let fileUrl: string | undefined = editingBook?.file_url ?? undefined;
+
+      // Upload cover if provided
+      if (coverFile) {
+        setUploadingCover(true);
+        coverImageUrl = await uploadBookCover(authorProfile.id, coverFile);
+        setUploadingCover(false);
+      }
+
+      // Upload book file if provided
+      if (bookFile) {
+        setUploadingBook(true);
+        fileUrl = await uploadBookFile(authorProfile.id, bookFile);
+        setUploadingBook(false);
+      }
+
+      const tags = form.tags.split(',').map((t) => t.trim()).filter(Boolean);
+      const totalPages = form.totalPages ? parseInt(form.totalPages) : undefined;
+      const price = form.isFree ? 0 : parseFloat(form.price);
+
+      if (modalMode === 'create') {
+        const newBook = await createBook({
+          authorProfileId: authorProfile.id,
+          title: form.title,
+          description: form.description,
+          language: form.language,
+          category: form.category,
+          tags,
+          price,
+          isFree: form.isFree,
+          totalPages,
+          coverImageUrl,
+          fileUrl,
+          coverColorPrimary: form.coverColorPrimary,
+          coverColorSecondary: form.coverColorSecondary,
+        });
+        setBooks((prev) => [newBook, ...prev]);
+        setSuccessMsg('🎉 Book published successfully!');
+      } else if (editingBook) {
+        const updated = await updateBook(editingBook.id, {
+          title: form.title,
+          description: form.description,
+          language: form.language,
+          category: form.category,
+          tags,
+          price,
+          isFree: form.isFree,
+          totalPages,
+          coverImageUrl,
+          fileUrl,
+          coverColorPrimary: form.coverColorPrimary,
+          coverColorSecondary: form.coverColorSecondary,
+        });
+        setBooks((prev) => prev.map((b) => b.id === updated.id ? updated : b));
+        setSuccessMsg('✅ Book updated successfully!');
+      }
+
+      setShowModal(false);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : 'Save failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+      setUploadingCover(false);
+      setUploadingBook(false);
+    }
+  }
+
+  async function handleDelete(bookId: string) {
+    setDeleting(true);
+    try {
+      await deleteBook(bookId);
+      setBooks((prev) => prev.filter((b) => b.id !== bookId));
+      setDeleteConfirm(null);
+      setSuccessMsg('Book deleted.');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="page author-dash-page">
+        <div className="app-loading">
+          <div className="app-loading-spinner" />
+          <p>Loading dashboard…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page author-dash-page">
+        <div className="app-error-banner">
+          ⚠️ {error}
+          <button className="btn-author-primary btn-sm" onClick={loadData}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authorProfile) {
+    return (
+      <div className="page author-dash-page">
+        <div className="app-status-card app-status-pending">
+          <div className="app-status-icon">⏳</div>
+          <h2>Author Profile Not Found</h2>
+          <p>Your author profile hasn't been created yet. Please wait or contact support if you've been approved.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -52,16 +329,22 @@ export default function AuthorDashboardPage() {
       <div className="author-dash-header">
         <div className="author-dash-badge">✍️ Author</div>
         <h1 className="author-dash-title">Author Dashboard</h1>
-        <p className="author-dash-sub">Publish, manage and track your books on Lehkhabu.</p>
+        <p className="author-dash-sub">Publish, manage, and track your books on Lehkhabu.</p>
       </div>
+
+      {/* Success toast */}
+      {successMsg && (
+        <div className="author-publish-toast">{successMsg}</div>
+      )}
 
       {/* Analytics Cards */}
       <div className="author-stats-grid">
         {[
-          { label: 'Published Books', value: authorBooks.length, icon: '📚', color: 'var(--color-terracotta)' },
-          { label: 'Total Sales', value: totalSales, icon: '🛒', color: 'var(--color-sage-dark)' },
-          { label: 'Total Revenue', value: `₹${totalRevenue.toLocaleString('en-IN')}`, icon: '💰', color: '#C17817' },
-          { label: 'Avg Rating', value: avgRating > 0 ? `${avgRating.toFixed(1)} ★` : '—', icon: '⭐', color: '#D4AC0D' },
+          { label: 'Published',  value: publishedBooks.length, icon: '📚', color: 'var(--color-terracotta)' },
+          { label: 'Total Books', value: books.length, icon: '🗂️', color: 'var(--color-sage-dark)' },
+          { label: 'Total Views',  value: totalViews.toLocaleString('en-IN'), icon: '👁️', color: '#C17817' },
+          { label: 'Purchases',  value: totalPurchases, icon: '🛒', color: '#7C3AED' },
+          { label: 'Avg Rating', value: avgRating > 0 ? `${avgRating.toFixed(1)}★` : '—', icon: '⭐', color: '#D4AC0D' },
         ].map((s) => (
           <div key={s.label} className="author-stat-card">
             <div className="author-stat-icon">{s.icon}</div>
@@ -71,162 +354,351 @@ export default function AuthorDashboardPage() {
         ))}
       </div>
 
-      {/* Publish success toast */}
-      {published && (
-        <div className="author-publish-toast">
-          🎉 Book published successfully!
-        </div>
-      )}
-
-      {/* Publish Section */}
+      {/* Books Section */}
       <div className="author-section">
         <div className="author-section-header">
           <h2>Your Books</h2>
-          <button className="btn-author-primary btn-sm" id="publish-new-btn" onClick={() => setShowPublish(true)}>
+          <button className="btn-author-primary btn-sm" id="publish-new-btn" onClick={openCreate}>
             + Publish New Book
           </button>
         </div>
 
-        {authorBooks.length === 0 ? (
+        {books.length === 0 ? (
           <div className="author-empty-state">
             <div className="author-empty-icon">📖</div>
-            <h3>No books published yet</h3>
-            <p>Publish your first book and start reaching readers across the Mizo community.</p>
-            <button className="btn-author-primary" onClick={() => setShowPublish(true)}>
+            <h3>No books yet</h3>
+            <p>Publish your first book and start reaching readers across the community.</p>
+            <button className="btn-author-primary" onClick={openCreate}>
               Publish Your First Book
             </button>
           </div>
         ) : (
           <div className="author-books-list">
-            {authorBooks.map((book) => (
-              <AuthorBookRow key={book.id} book={book} />
-            ))}
+            {books.map((book) => {
+              const { label, cls } = formatBookStatus(book.status);
+              const coverGrad = book.cover_color_primary
+                ? `linear-gradient(135deg, ${book.cover_color_primary}, ${book.cover_color_secondary ?? book.cover_color_primary})`
+                : 'linear-gradient(135deg,#C17817,#8B4513)';
+
+              return (
+                <div key={book.id} className="author-book-row">
+                  {/* Cover */}
+                  <div
+                    className="author-book-cover"
+                    style={{
+                      background: book.cover_image_url ? undefined : coverGrad,
+                      backgroundImage: book.cover_image_url ? `url(${book.cover_image_url})` : undefined,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                  >
+                    {!book.cover_image_url && <span>{book.title.slice(0, 4)}</span>}
+                  </div>
+
+                  {/* Info */}
+                  <div className="author-book-info">
+                    <div className="author-book-title">{book.title}</div>
+                    <div className="author-book-meta">
+                      {book.category} · {book.language}
+                      {book.total_pages ? ` · ${book.total_pages}p` : ''}
+                      {' · '}
+                      {book.is_free ? 'Free' : `₹${book.price}`}
+                    </div>
+                    <div className="author-book-published">
+                      {book.published_at
+                        ? `Published ${new Date(book.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        : `Created ${new Date(book.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                    </div>
+                    <span className={`author-book-status-badge ${cls}`}>{label}</span>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="author-book-stats">
+                    <div className="author-book-stat">
+                      <span className="author-book-stat-val">{book.view_count ?? 0}</span>
+                      <span className="author-book-stat-label">Views</span>
+                    </div>
+                    <div className="author-book-stat">
+                      <span className="author-book-stat-val">{book.purchase_count}</span>
+                      <span className="author-book-stat-label">Purchases</span>
+                    </div>
+                    <div className="author-book-stat">
+                      <span className="author-book-stat-val">
+                        {book.average_rating > 0 ? `${book.average_rating.toFixed(1)}★` : '—'}
+                      </span>
+                      <span className="author-book-stat-label">Rating</span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="author-book-actions">
+                    <button
+                      className="author-book-action-btn"
+                      title="Edit"
+                      onClick={() => openEdit(book)}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="author-book-action-btn author-book-action-delete"
+                      title="Delete"
+                      onClick={() => setDeleteConfirm(book.id)}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Publish Modal */}
-      {showPublish && (
-        <div className="author-modal-backdrop" onClick={() => setShowPublish(false)}>
-          <div className="author-modal" onClick={(e) => e.stopPropagation()}>
+      {/* Publish / Edit Modal */}
+      {showModal && (
+        <div className="author-modal-backdrop" onClick={() => !submitting && setShowModal(false)}>
+          <div className="author-modal author-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="author-modal-header">
-              <h3>Publish New Book</h3>
-              <button className="author-modal-close" onClick={() => setShowPublish(false)}>✕</button>
+              <h3>{modalMode === 'create' ? 'Publish New Book' : 'Edit Book'}</h3>
+              <button className="author-modal-close" onClick={() => !submitting && setShowModal(false)}>✕</button>
             </div>
 
-            <div className="app-field">
-              <label>Book Title</label>
-              <input
-                id="publish-title"
-                className={`app-input ${errors.title ? 'app-input-error' : ''}`}
-                value={form.title}
-                onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. Kalpana"
-              />
-              {errors.title && <span className="app-field-error">{errors.title}</span>}
-            </div>
-
-            <div className="app-field">
-              <label>Description</label>
-              <textarea
-                id="publish-desc"
-                className={`app-textarea ${errors.description ? 'app-input-error' : ''}`}
-                value={form.description}
-                onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Brief synopsis of your book…"
-                rows={3}
-              />
-              {errors.description && <span className="app-field-error">{errors.description}</span>}
-            </div>
-
-            <div className="app-fields-row">
+            <div className="author-modal-body">
+              {/* Cover Image */}
               <div className="app-field">
-                <label>Genre</label>
-                <select
-                  className={`app-select ${errors.genre ? 'app-input-error' : ''}`}
-                  value={form.genre}
-                  onChange={(e) => setForm(f => ({ ...f, genre: e.target.value }))}
-                >
-                  <option value="">Select…</option>
-                  {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-                {errors.genre && <span className="app-field-error">{errors.genre}</span>}
+                <label>Book Cover</label>
+                <div className="author-cover-upload-row">
+                  <div
+                    className="author-cover-preview"
+                    style={{
+                      background: coverPreview ? undefined : `linear-gradient(135deg, ${form.coverColorPrimary}, ${form.coverColorSecondary})`,
+                      backgroundImage: coverPreview ? `url(${coverPreview})` : undefined,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                    onClick={() => coverInputRef.current?.click()}
+                  >
+                    {!coverPreview && <span className="author-cover-placeholder">📷<br/><small>Upload Cover</small></span>}
+                  </div>
+                  <div className="author-cover-controls">
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept={ACCEPTED_COVER_FILES}
+                      style={{ display: 'none' }}
+                      onChange={handleCoverChange}
+                    />
+                    <button
+                      className="author-cover-upload-btn"
+                      onClick={() => coverInputRef.current?.click()}
+                      type="button"
+                    >
+                      {coverFile ? `📄 ${coverFile.name.slice(0, 24)}` : '📁 Choose Image'}
+                    </button>
+                    {coverPreview && !coverFile && <span className="author-cover-hint">Current cover loaded</span>}
+                    {formErrors.cover && <span className="app-field-error">{formErrors.cover}</span>}
+
+                    <div className="app-cover-colors">
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Or pick a color</label>
+                      <div className="author-color-swatches">
+                        {COVER_GRADIENTS.map((g) => (
+                          <button
+                            key={g.label}
+                            type="button"
+                            className={`app-color-swatch ${form.coverColorPrimary === g.value ? 'selected' : ''}`}
+                            style={{ background: `linear-gradient(135deg,${g.value},${g.secondary})` }}
+                            title={g.label}
+                            onClick={() => {
+                              setForm((f) => ({ ...f, coverColorPrimary: g.value, coverColorSecondary: g.secondary }));
+                              setCoverPreview(null);
+                              setCoverFile(null);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="app-field">
-                <label>Language</label>
-                <select
-                  className={`app-select ${errors.language ? 'app-input-error' : ''}`}
-                  value={form.language}
-                  onChange={(e) => setForm(f => ({ ...f, language: e.target.value }))}
-                >
-                  <option value="">Select…</option>
-                  {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-                {errors.language && <span className="app-field-error">{errors.language}</span>}
-              </div>
-            </div>
 
-            <div className="app-fields-row">
+              {/* Book File */}
               <div className="app-field">
-                <label>Price (₹)</label>
+                <label>Book File <span className="app-field-hint">(PDF, EPUB, DOCX)</span></label>
+                <div className="author-file-upload-row">
+                  <input
+                    ref={bookFileInputRef}
+                    type="file"
+                    accept={ACCEPTED_BOOK_FILES}
+                    style={{ display: 'none' }}
+                    onChange={handleBookFileChange}
+                  />
+                  <button
+                    type="button"
+                    className="author-cover-upload-btn"
+                    onClick={() => bookFileInputRef.current?.click()}
+                  >
+                    {bookFile ? `📄 ${bookFile.name.slice(0, 30)}` : editingBook?.file_url ? '📄 Replace file' : '📁 Upload Book File'}
+                  </button>
+                  {editingBook?.file_url && !bookFile && (
+                    <span className="author-cover-hint">✓ File already uploaded</span>
+                  )}
+                  {formErrors.bookFile && <span className="app-field-error">{formErrors.bookFile}</span>}
+                </div>
+              </div>
+
+              {/* Title */}
+              <div className="app-field">
+                <label>Book Title *</label>
                 <input
-                  type="number"
+                  id="publish-title"
+                  className={`app-input ${formErrors.title ? 'app-input-error' : ''}`}
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="e.g. Kalpana"
+                />
+                {formErrors.title && <span className="app-field-error">{formErrors.title}</span>}
+              </div>
+
+              {/* Description */}
+              <div className="app-field">
+                <label>Description *</label>
+                <textarea
+                  id="publish-desc"
+                  className={`app-textarea ${formErrors.description ? 'app-input-error' : ''}`}
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Brief synopsis of your book…"
+                  rows={3}
+                />
+                {formErrors.description && <span className="app-field-error">{formErrors.description}</span>}
+              </div>
+
+              {/* Genre & Language */}
+              <div className="app-fields-row">
+                <div className="app-field">
+                  <label>Category *</label>
+                  <select
+                    className={`app-select ${formErrors.category ? 'app-input-error' : ''}`}
+                    value={form.category}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  >
+                    <option value="">Select category</option>
+                    {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  {formErrors.category && <span className="app-field-error">{formErrors.category}</span>}
+                </div>
+                <div className="app-field">
+                  <label>Language *</label>
+                  <select
+                    className={`app-select ${formErrors.language ? 'app-input-error' : ''}`}
+                    value={form.language}
+                    onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}
+                  >
+                    <option value="">Select language</option>
+                    {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  {formErrors.language && <span className="app-field-error">{formErrors.language}</span>}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="app-field">
+                <label>Tags <span className="app-field-hint">(comma-separated, optional)</span></label>
+                <input
                   className="app-input"
-                  value={form.price}
-                  min={29}
-                  onChange={(e) => setForm(f => ({ ...f, price: Number(e.target.value) }))}
+                  value={form.tags}
+                  onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
+                  placeholder="e.g. adventure, romance, coming-of-age"
                 />
               </div>
-              <div className="app-field">
-                <label>Pages</label>
-                <input
-                  type="number"
-                  className="app-input"
-                  value={form.pages}
-                  min={20}
-                  onChange={(e) => setForm(f => ({ ...f, pages: Number(e.target.value) }))}
-                />
+
+              {/* Price & Pages */}
+              <div className="app-fields-row">
+                <div className="app-field">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.isFree}
+                      onChange={(e) => setForm((f) => ({ ...f, isFree: e.target.checked }))}
+                      style={{ marginRight: 6 }}
+                    />
+                    Free book
+                  </label>
+                  {!form.isFree && (
+                    <input
+                      type="number"
+                      className={`app-input ${formErrors.price ? 'app-input-error' : ''}`}
+                      value={form.price}
+                      min={0}
+                      onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                      placeholder="Price in ₹"
+                    />
+                  )}
+                  {formErrors.price && <span className="app-field-error">{formErrors.price}</span>}
+                </div>
+                <div className="app-field">
+                  <label>Total Pages <span className="app-field-hint">(optional)</span></label>
+                  <input
+                    type="number"
+                    className="app-input"
+                    value={form.totalPages}
+                    min={1}
+                    onChange={(e) => setForm((f) => ({ ...f, totalPages: e.target.value }))}
+                    placeholder="e.g. 320"
+                  />
+                </div>
               </div>
+
+              {submitError && (
+                <div className="app-submit-error">⚠️ {submitError}</div>
+              )}
             </div>
 
             <div className="author-modal-footer">
-              <button className="app-back-btn" onClick={() => setShowPublish(false)}>Cancel</button>
-              <button className="btn-author-primary" id="publish-submit-btn" onClick={handlePublish}>
-                Publish Book 🚀
+              <button className="app-back-btn" onClick={() => !submitting && setShowModal(false)} disabled={submitting}>
+                Cancel
+              </button>
+              <button
+                className="btn-author-primary"
+                id="publish-submit-btn"
+                onClick={handleSave}
+                disabled={submitting}
+              >
+                {submitting
+                  ? uploadingCover ? 'Uploading cover…'
+                    : uploadingBook ? 'Uploading file…'
+                    : 'Saving…'
+                  : modalMode === 'create' ? '🚀 Publish Book' : '✅ Save Changes'}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function AuthorBookRow({ book }: { book: AuthorBookEntry }) {
-  return (
-    <div className="author-book-row">
-      <div className="author-book-cover" style={{ background: book.coverColor }}>
-        <span>{book.title.slice(0, 4)}</span>
-      </div>
-      <div className="author-book-info">
-        <div className="author-book-title">{book.title}</div>
-        <div className="author-book-meta">{book.genre} · {book.language} · {book.pages}p · ₹{book.price}</div>
-        <div className="author-book-published">Published {new Date(book.publishedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-      </div>
-      <div className="author-book-stats">
-        <div className="author-book-stat">
-          <span className="author-book-stat-val">{book.sales}</span>
-          <span className="author-book-stat-label">Sales</span>
+      {/* Delete Confirm Modal */}
+      {deleteConfirm && (
+        <div className="author-modal-backdrop" onClick={() => !deleting && setDeleteConfirm(null)}>
+          <div className="author-modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            <div className="author-modal-header">
+              <h3>Delete Book?</h3>
+            </div>
+            <div style={{ padding: '1rem 1.5rem', color: 'var(--text-secondary)' }}>
+              This action cannot be undone. The book and all its data will be permanently removed.
+            </div>
+            <div className="author-modal-footer">
+              <button className="app-back-btn" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button
+                className="btn-author-primary"
+                style={{ background: '#ef4444', borderColor: '#ef4444' }}
+                onClick={() => handleDelete(deleteConfirm)}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : '🗑️ Delete'}
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="author-book-stat">
-          <span className="author-book-stat-val">₹{book.revenue.toLocaleString('en-IN')}</span>
-          <span className="author-book-stat-label">Revenue</span>
-        </div>
-        <div className="author-book-stat">
-          <span className="author-book-stat-val">{book.rating > 0 ? `${book.rating.toFixed(1)}★` : '—'}</span>
-          <span className="author-book-stat-label">Rating</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

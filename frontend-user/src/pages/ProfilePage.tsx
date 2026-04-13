@@ -1,18 +1,28 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { useUserStore } from '../store/userStore';
 import { useBooksStore } from '../store/booksStore';
 import { signOut } from '../services/auth.service';
-import { useState } from 'react';
+import { fetchMyApplication } from '../services/author.service';
+import { useState, useEffect } from 'react';
 import './ProfilePage.css';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { profile } = useAuthStore();
-  const { role, applicationStatus } = useUserStore();
   const { shelf, purchases } = useBooksStore();
 
-  const isAuthor = profile?.role === 'AUTHOR' || role === 'author';
+  const isAuthor = profile?.role === 'AUTHOR' || profile?.role === 'ADMIN';
+  const [applicationStatus, setApplicationStatus] = useState<'none'|'pending'|'approved'|'rejected'>('none');
+
+  // Fetch real application status from DB
+  useEffect(() => {
+    if (!profile?.id || isAuthor) return;
+    fetchMyApplication(profile.id).then((app) => {
+      if (!app) return;
+      const s = app.status.toLowerCase() as 'pending' | 'approved' | 'rejected';
+      setApplicationStatus(s);
+    }).catch(() => {});
+  }, [profile?.id, isAuthor]);
 
   // Shelf counts
   const readCount = shelf.filter((s) => s.shelf === 'READ').length;

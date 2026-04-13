@@ -205,7 +205,7 @@ export default function HomePage() {
   const { profile } = useAuthStore();
   const { books, booksLoading, loadBooks, shelf } = useBooksStore();
 
-  const userId = profile?.supabase_uid;
+  const userId = profile?.id;
   const firstName = profile?.full_name?.split(' ')[0] ?? profile?.username ?? 'Reader';
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
@@ -296,7 +296,7 @@ export default function HomePage() {
             <h2 className="hb-hero-title">{heroBook.title}</h2>
             <div className="hb-hero-author">
               {heroBook.author_name}
-              {heroBook.published_year ? ` · ${heroBook.published_year}` : ''}
+              {heroBook.published_at ? ` · ${new Date(heroBook.published_at).getFullYear()}` : ''}
             </div>
             {heroBook.average_rating > 0 && (
               <div className="hb-hero-stars">

@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { useUserStore } from '../../store/userStore';
+import { useNotifications } from '../../hooks/useNotifications';
 
 const NAV_ITEMS = [
   {
@@ -54,12 +55,78 @@ const AUTHOR_NAV = {
   ),
 };
 
+function NotificationBell() {
+  const navigate = useNavigate();
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="notif-bell-wrap">
+      <button
+        className="top-header-btn notif-bell-btn"
+        aria-label="Notifications"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 01-3.46 0" />
+        </svg>
+        {unreadCount > 0 && (
+          <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="notif-backdrop" onClick={() => setOpen(false)} />
+          <div className="notif-dropdown">
+            <div className="notif-dropdown-header">
+              <span>Notifications</span>
+              {unreadCount > 0 && (
+                <button
+                  className="notif-mark-all"
+                  onClick={() => { markAllRead(); setOpen(false); }}
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+            <div className="notif-list">
+              {notifications.length === 0 && (
+                <div className="notif-empty">No notifications yet</div>
+              )}
+              {notifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={`notif-item ${n.is_read ? '' : 'notif-item-unread'}`}
+                  onClick={async () => {
+                    await markRead(n.id);
+                    setOpen(false);
+                    if (n.type === 'AUTHOR_APPROVED') navigate('/author');
+                  }}
+                >
+                  <div className="notif-item-title">{n.title}</div>
+                  <div className="notif-item-msg">{n.message}</div>
+                  <div className="notif-item-time">
+                    {new Date(n.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AppLayout() {
   const { profile } = useAuthStore();
-  const { role } = useUserStore();
   const navigate = useNavigate();
+  const { approvalPopup, dismissPopup } = useNotifications();
 
-  const isAuthor = profile?.role === 'AUTHOR' || role === 'author';
+  const isAuthor = profile?.role === 'AUTHOR' || profile?.role === 'ADMIN';
   const navItems = isAuthor ? [...NAV_ITEMS, AUTHOR_NAV] : NAV_ITEMS;
 
   const displayInitial =
@@ -69,6 +136,30 @@ export default function AppLayout() {
 
   return (
     <div className="app-layout">
+      {/* ── Approval Popup ──────────────────────────────────────── */}
+      {approvalPopup && (
+        <div className="author-approval-popup">
+          <div className="author-approval-popup-inner">
+            <div className="author-approval-popup-icon">🎉</div>
+            <div className="author-approval-popup-body">
+              <div className="author-approval-popup-title">{approvalPopup.title}</div>
+              <div className="author-approval-popup-msg">{approvalPopup.message}</div>
+              <div className="author-approval-popup-actions">
+                <button
+                  className="btn-author-primary btn-sm"
+                  onClick={() => { dismissPopup(); navigate('/author'); }}
+                >
+                  Go to Dashboard →
+                </button>
+                <button className="app-back-btn btn-sm" onClick={dismissPopup}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Top Header ──────────────────────────────────────────── */}
       <header className="top-header">
         <div className="top-header-inner">
@@ -89,7 +180,10 @@ export default function AppLayout() {
               </svg>
             </NavLink>
 
-            {/* Avatar tap → Profile page, no dropdown */}
+            {/* Notification Bell */}
+            <NotificationBell />
+
+            {/* Avatar tap → Profile page */}
             <button
               className="top-header-avatar"
               aria-label="Go to profile"

@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import AdminLayout from '../components/layout/AdminLayout';
+import AdminLoginPage from '../features/auth/components/AdminLoginPage';
 import DashboardPage from '../features/analytics/DashboardPage';
 import BooksPage from '../features/books/BooksPage';
 import AuthorsPage from '../features/books/AuthorsPage';
@@ -13,6 +14,9 @@ import SettingsPage from '../features/analytics/SettingsPage';
 import AdminAccountsPage from '../features/analytics/AdminAccountsPage';
 
 export const router = createBrowserRouter([
+  // Standalone admin login — no layout wrapper
+  { path: '/login', element: <AdminLoginPage /> },
+
   {
     path: '/',
     element: <AdminLayout />,
@@ -31,3 +35,4 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+

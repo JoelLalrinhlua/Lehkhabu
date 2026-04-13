@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 
+/* ── Types ───────────────────────────────────────────────────────── */
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -14,7 +16,6 @@ export interface AdminUser {
   followingCount: number;
   createdAt: string;
   updatedAt: string;
-  // Derived / joined fields
   purchaseCount: number;
   totalSpent: number;
 }
@@ -27,7 +28,6 @@ export interface AdminAuthorProfile {
   totalBooks: number;
   totalSales: number;
   createdAt: string;
-  // joined
   user?: AdminUser;
 }
 
@@ -38,25 +38,28 @@ export interface AdminApplication {
   motivation: string;
   genre: string;
   socialLinks?: string;
+  sampleFileName?: string;
+  sampleFileUrl?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   adminNotes?: string;
   reviewedBy?: string;
   submittedAt: string;
   reviewedAt?: string;
-  // joined 
+  // joined
   userName: string;
   userEmail: string;
   userAvatar?: string;
 }
 
-/** Fetch all users */
+/* ── Users ───────────────────────────────────────────────────────── */
+
+/** Fetch all users (admin only — requires Admin SELECT RLS policy) */
 export async function fetchUsers(): Promise<AdminUser[]> {
   const { data, error } = await supabase
     .from('users')
-    .select(`
-      id, email, username, full_name, role, is_active, is_email_verified,
-      avatar_url, bio, followers_count, following_count, created_at, updated_at
-    `)
+    .select(
+      'id, email, username, full_name, role, is_active, is_email_verified, avatar_url, bio, followers_count, following_count, created_at, updated_at'
+    )
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -93,7 +96,7 @@ export async function fetchUsers(): Promise<AdminUser[]> {
   }));
 }
 
-/** Update user status (active/suspended) */
+/** Update user active status */
 export async function updateUserActive(userId: string, isActive: boolean) {
   const { error } = await supabase
     .from('users')
@@ -102,23 +105,35 @@ export async function updateUserActive(userId: string, isActive: boolean) {
   if (error) throw error;
 }
 
-/** Update user role */
-export async function updateUserRole(userId: string, role: AdminUser['role']) {
-  const { error } = await supabase
-    .from('users')
-    .update({ role, updated_at: new Date().toISOString() })
-    .eq('id', userId);
+/**
+ * Update user role via the DB function that enforces the application requirement.
+ * Only USER → AUTHOR (if approved) or AUTHOR → USER are allowed.
+ * Setting role to ADMIN is blocked at both frontend and DB level.
+ */
+export async function updateUserRole(userId: string, role: 'USER' | 'AUTHOR') {
+  // Hard frontend guard
+  if ((role as string) === 'ADMIN') {
+    throw new Error('Assigning the ADMIN role is strictly prohibited.');
+  }
+
+  const { error } = await supabase.rpc('admin_set_user_role', {
+    p_user_id: userId,
+    p_new_role: role,
+  });
+
   if (error) throw error;
 }
 
-/** Fetch author profiles with user info */
+/* ── Author Profiles ─────────────────────────────────────────────── */
+
+/** Fetch author profiles with joined user info */
 export async function fetchAuthors(): Promise<AdminAuthorProfile[]> {
   const { data, error } = await supabase
     .from('author_profiles')
     .select(`
       id, user_id, pen_name, website, total_books, total_sales, created_at,
       users!author_profiles_user_id_fkey (
-        id, email, username, full_name, avatar_url, is_active, created_at
+        id, email, username, full_name, avatar_url, is_active, created_at, role
       )
     `)
     .order('total_sales', { ascending: false });
@@ -138,7 +153,7 @@ export async function fetchAuthors(): Promise<AdminAuthorProfile[]> {
       email: a.users.email,
       username: a.users.username,
       fullName: a.users.full_name,
-      role: 'AUTHOR',
+      role: a.users.role,
       isActive: a.users.is_active,
       isEmailVerified: false,
       followersCount: 0,
@@ -151,12 +166,15 @@ export async function fetchAuthors(): Promise<AdminAuthorProfile[]> {
   }));
 }
 
-/** Fetch all author applications */
+/* ── Applications ────────────────────────────────────────────────── */
+
+/** Fetch all author applications with user info */
 export async function fetchApplications(): Promise<AdminApplication[]> {
   const { data, error } = await supabase
     .from('author_applications')
     .select(`
       id, user_id, writing_sample, motivation, genre, social_links,
+      sample_file_url, sample_file_name,
       status, admin_notes, reviewed_by, submitted_at, reviewed_at,
       users!author_applications_user_id_fkey ( full_name, username, email, avatar_url )
     `)
@@ -171,6 +189,8 @@ export async function fetchApplications(): Promise<AdminApplication[]> {
     motivation: a.motivation,
     genre: a.genre,
     socialLinks: a.social_links,
+    sampleFileUrl: a.sample_file_url,
+    sampleFileName: a.sample_file_name,
     status: a.status,
     adminNotes: a.admin_notes,
     reviewedBy: a.reviewed_by,
@@ -182,57 +202,98 @@ export async function fetchApplications(): Promise<AdminApplication[]> {
   }));
 }
 
-/** Approve an author application: update status + upgrade user role */
-export async function approveApplication(applicationId: string, userId: string, reviewerId: string) {
-  // Update application
+/** Approve an application: update status → call RPC to set role + send notification */
+export async function approveApplication(applicationId: string, userId: string) {
+  // Update application status first
   const { error: appErr } = await supabase
     .from('author_applications')
     .update({
       status: 'APPROVED',
-      reviewed_by: reviewerId,
       reviewed_at: new Date().toISOString(),
     })
     .eq('id', applicationId);
   if (appErr) throw appErr;
 
-  // Upgrade user role to AUTHOR
-  const { error: userErr } = await supabase
-    .from('users')
-    .update({ role: 'AUTHOR', updated_at: new Date().toISOString() })
-    .eq('id', userId);
-  if (userErr) throw userErr;
+  // Call SECURITY DEFINER function: upgrades role + creates author_profile + sends notification
+  const { error: fnErr } = await supabase.rpc('create_author_approval_notification', {
+    p_user_id: userId,
+    p_status: 'APPROVED',
+    p_admin_notes: null,
+  });
 
-  // Create author_profile if not exists
-  const { data: existing } = await supabase
-    .from('author_profiles')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (!existing) {
-    await supabase.from('author_profiles').insert({
-      user_id: userId,
-      total_books: 0,
-      total_sales: 0,
-    });
+  if (fnErr) {
+    // Fallback: manually upgrade if RPC fails (e.g., notification insert permissions)
+    console.warn('RPC failed, using fallback:', fnErr.message);
+    await supabase
+      .from('users')
+      .update({ role: 'AUTHOR', updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    await supabase
+      .from('author_profiles')
+      .upsert({ user_id: userId, total_books: 0, total_sales: 0 }, { onConflict: 'user_id' });
   }
 }
 
-/** Reject an author application */
-export async function rejectApplication(applicationId: string, reviewerId: string, adminNotes?: string) {
+/** Reject an application + send notification */
+export async function rejectApplication(applicationId: string, adminNotes?: string) {
+  // Get user_id
+  const { data: app } = await supabase
+    .from('author_applications')
+    .select('user_id')
+    .eq('id', applicationId)
+    .single();
+
   const { error } = await supabase
     .from('author_applications')
     .update({
       status: 'REJECTED',
-      reviewed_by: reviewerId,
       reviewed_at: new Date().toISOString(),
       admin_notes: adminNotes ?? null,
     })
     .eq('id', applicationId);
   if (error) throw error;
+
+  // Send notification
+  if (app?.user_id) {
+    await supabase.rpc('create_author_approval_notification', {
+      p_user_id: app.user_id,
+      p_status: 'REJECTED',
+      p_admin_notes: adminNotes ?? null,
+    }).catch(console.warn);
+  }
 }
 
-/** Fetch admin accounts */
+/* ── Real-time Subscriptions ─────────────────────────────────────── */
+
+/** Subscribe to new/updated applications (admin real-time) */
+export function subscribeToApplicationChanges(onRefresh: () => void) {
+  return supabase
+    .channel(`admin-apps-${Math.random()}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'author_applications' },
+      onRefresh
+    )
+    .subscribe();
+}
+
+/** Subscribe to user changes (role, active status) */
+export function subscribeToUserChanges(onRefresh: () => void) {
+  return supabase
+    .channel(`admin-users-${Math.random()}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'users' },
+      onRefresh
+    )
+    .subscribe();
+}
+
+// Keep old name for backward compatibility
+export const subscribeToAllApplications = subscribeToApplicationChanges;
+
+/* ── Admin Accounts ──────────────────────────────────────────────── */
+
 export async function fetchAdminAccounts() {
   const { data, error } = await supabase
     .from('admin_accounts')
@@ -242,15 +303,17 @@ export async function fetchAdminAccounts() {
   return data ?? [];
 }
 
-/** Create admin account */
-export async function createAdminAccount(email: string, fullName: string, role: 'admin' | 'super_admin' = 'admin') {
+export async function createAdminAccount(
+  email: string,
+  fullName: string,
+  role: 'admin' | 'super_admin' = 'admin'
+) {
   const { error } = await supabase
     .from('admin_accounts')
     .insert({ email, full_name: fullName, role });
   if (error) throw error;
 }
 
-/** Toggle admin account active state */
 export async function toggleAdminActive(adminId: string, isActive: boolean) {
   const { error } = await supabase
     .from('admin_accounts')

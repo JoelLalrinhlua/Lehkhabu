@@ -1,9 +1,8 @@
-from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,9 +25,9 @@ async def get_current_user(
     try:
         payload = decode_access_token(token)
         user_id: str = payload.get("sub")
-        if user_id is None:
+        if not user_id:
             raise credentials_exc
-    except JWTError:
+    except InvalidTokenError:
         raise credentials_exc
 
     result = await db.execute(select(User).where(User.id == user_id))
@@ -36,7 +35,10 @@ async def get_current_user(
     if user is None:
         raise credentials_exc
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated.",
+        )
     return user
 
 

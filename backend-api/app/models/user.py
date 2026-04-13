@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Integer,
     String,
     Text,
 )
@@ -48,11 +49,30 @@ class User(Base):
     # Social
     following_count: Mapped[int] = mapped_column(default=0, nullable=False)
     followers_count: Mapped[int] = mapped_column(default=0, nullable=False)
-    social_links: Mapped[str | None] = mapped_column(Text, nullable=True) # JSON string
+    social_links: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
     is_public_library: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Supabase auth UID (optional – for cases where Supabase handles login)
     supabase_uid: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+
+    # ── Security fields ───────────────────────────────
+    # Email verification: raw token is sent to user; only its SHA-256 hash is stored.
+    email_verification_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_verification_expires: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Password reset: same hash-before-store pattern.
+    password_reset_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    password_reset_expires: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Brute-force / account lockout
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
@@ -61,7 +81,7 @@ class User(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
     )
 
-    # ── Relationships ─────────────────────────────
+    # ── Relationships ─────────────────────────────────
     author_profile: Mapped["AuthorProfile | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )

@@ -84,7 +84,7 @@ export default function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { books, booksLoading, loadBooks } = useBooksStore();
   const { profile } = useAuthStore();
-  const userId = profile?.supabase_uid;
+  const userId = profile?.id;
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query,      setQuery ]     = useState(searchParams.get('q') ?? '');

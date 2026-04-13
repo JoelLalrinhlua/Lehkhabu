@@ -196,9 +196,46 @@ export default function AdminAccountsPage() {
               <h3>Add Admin Account</h3>
               <button className="btn-icon" onClick={() => setShowModal(false)} id="close-admin-modal"><XCircle size={16} /></button>
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', lineHeight: 1.6 }}>
-              This creates a record in the <strong>admin_accounts</strong> table. The admin will need a separate user account for full platform access.
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)', lineHeight: 1.6 }}>
+              This adds the email to the <strong>admin_accounts</strong> whitelist.{' '}
+              To allow login, the email must also exist as a Supabase auth user — run this SQL in your database:
             </p>
+            <pre style={{
+              background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 8, padding: '10px 14px', fontSize: '0.72rem',
+              color: '#a3e635', overflowX: 'auto', marginBottom: 'var(--space-md)', lineHeight: 1.6,
+            }}>
+{`-- 1. Create the auth user (replace values as needed)
+DO $$
+DECLARE v_uid uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO auth.users (
+    instance_id, id, aud, role, email,
+    encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at,
+    confirmation_token, recovery_token)
+  VALUES (
+    '00000000-0000-0000-0000-000000000000', v_uid,
+    'authenticated', 'authenticated', 'email@domain.com',
+    crypt('their_password', gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}', '{}',
+    now(), now(), '', '');
+  -- Required: add identity row or login will fail
+  INSERT INTO auth.identities (
+    id, user_id, provider_id, identity_data,
+    provider, last_sign_in_at, created_at, updated_at)
+  VALUES (
+    gen_random_uuid(), v_uid, 'email@domain.com',
+    jsonb_build_object('sub', v_uid::text,
+      'email', 'email@domain.com', 'email_verified', true),
+    'email', now(), now(), now());
+END;$$;
+
+-- 2. Whitelist in admin_accounts
+INSERT INTO admin_accounts (email, full_name, role)
+VALUES ('email@domain.com', 'Full Name', 'admin');`}
+            </pre>
             <div className="form-group">
               <label className="form-label">Full Name *</label>
               <input className="form-control" placeholder="e.g. Ringsenvy Admin"
