@@ -129,7 +129,10 @@ function BookStrip({ books, userId, autoScrollDelay = 0 }: { books: Book[]; user
     navigate(`/book/${bookId}`);
   };
 
-  const displayBooks = Array(30).fill(books).flat();
+  // Only loop books if there are enough to warrant it — cap at 3 copies max
+  const displayBooks = books.length > 0
+    ? (books.length < 6 ? [...books, ...books, ...books] : books)
+    : books;
 
   return (
     <div 
@@ -171,7 +174,11 @@ function BookStrip({ books, userId, autoScrollDelay = 0 }: { books: Book[]; user
 /* ── Continue Reading card ──────────────────────────────── */
 function ContinueReadingCard({ entry, book }: { entry: ShelfEntry; book: Book }) {
   const navigate = useNavigate();
-  const progress = 40; // placeholder — real progress comes from readingProgress
+  const { readingProgress } = useBooksStore();
+  const rp = readingProgress[entry.book_id];
+  const totalPages = book.total_pages ?? 1;
+  const currentPage = rp?.current_page ?? 0;
+  const progress = totalPages > 0 ? Math.min(Math.round((currentPage / totalPages) * 100), 100) : 0;
 
   return (
     <div
@@ -188,7 +195,9 @@ function ContinueReadingCard({ entry, book }: { entry: ShelfEntry; book: Book })
         <div className="hb-cr-bar">
           <div className="hb-cr-bar-fill" style={{ width: `${progress}%` }} />
         </div>
-        <div className="hb-cr-progress-label">{progress}% completed</div>
+        <div className="hb-cr-progress-label">
+          {rp ? `Page ${currentPage} of ${totalPages} · ${progress}% completed` : 'Start reading'}
+        </div>
       </div>
       <div className="hb-cr-chevron">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18">
@@ -212,7 +221,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (books.length === 0 && !booksLoading) loadBooks();
-  }, []);
+  }, [books.length, booksLoading, loadBooks]);
 
   const toggleSection = (key: string) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));

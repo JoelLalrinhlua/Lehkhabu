@@ -56,18 +56,26 @@ export const useBooksStore = create<BooksState>((set, get) => ({
   loadUserData: async (userId: string) => {
     set({ shelfLoading: true });
     try {
-      const [shelfData, purchasesData] = await Promise.all([
+      const [shelfData, purchasesData, progressData] = await Promise.all([
         fetchUserShelf(userId),
         fetchUserPurchases(userId),
+        fetchReadingProgress(userId),
       ]);
 
       const purchasedBookIds = purchasesData.map(
         (p: { book_id: string }) => p.book_id
       );
 
+      // Build readingProgress map keyed by book_id
+      const progressMap: Record<string, ReadingProgress> = {};
+      (progressData as ReadingProgress[]).forEach((rp) => {
+        progressMap[rp.book_id] = rp;
+      });
+
       set({
         shelf: shelfData as ShelfEntry[],
         purchases: purchasedBookIds,
+        readingProgress: progressMap,
         shelfLoading: false,
       });
     } catch (e) {

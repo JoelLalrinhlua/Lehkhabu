@@ -298,19 +298,22 @@ export default function AdminLayout() {
   }, [navigate]);
 
   const loadStats = useCallback(() => {
-    fetchDashboardStats().then(setStats).catch(console.error);
+    fetchDashboardStats().then(setStats).catch((err) => {
+      console.error('Failed to load dashboard stats:', err);
+    });
   }, []);
 
   // Initial load (only after auth check)
   useEffect(() => { if (authChecked) loadStats(); }, [loadStats, authChecked]);
 
-  // Real-time: refresh badge when applications change
+  // Real-time: refresh badge when applications change — only after auth confirmed
   useEffect(() => {
+    if (!authChecked) return;
     const channel = subscribeToApplicationChanges(() => {
       loadStats();
     });
     return () => { channel.unsubscribe(); };
-  }, [loadStats]);
+  }, [loadStats, authChecked]);
 
   // Toast helpers
   const addToast = (message: string, type: Toast['type'] = 'success') => {

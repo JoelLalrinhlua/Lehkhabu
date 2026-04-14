@@ -37,6 +37,9 @@ interface AuthState {
   clearAuth: () => void;
 }
 
+// Store the listener unsubscribe handle outside the store to avoid state overhead
+let _authListenerUnsubscribe: (() => void) | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
@@ -45,6 +48,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialized: false,
 
   initialize: async () => {
+    // Prevent duplicate initialization
+    if (get().initialized) return;
     set({ loading: true });
 
     // Get current session
@@ -55,15 +60,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().loadProfile(session.user.id);
     }
 
+    // Clean up any existing listener before registering a new one
+    _authListenerUnsubscribe?.();
+
     // Listen for auth changes (sign-in, sign-out, token refresh)
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      set({ session, user: session?.user ?? null });
-      if (session?.user) {
-        await get().loadProfile(session.user.id);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      set({ session: newSession, user: newSession?.user ?? null });
+      if (newSession?.user) {
+        await get().loadProfile(newSession.user.id);
       } else {
         set({ profile: null });
       }
     });
+
+    _authListenerUnsubscribe = () => subscription.unsubscribe();
 
     set({ loading: false, initialized: true });
   },
@@ -103,6 +113,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   clearAuth: () => {
-    set({ session: null, user: null, profile: null });
+    // Unsubscribe auth listener when clearing auth state
+    _authListenerUnsubscribe?.();
+    _authListenerUnsubscribe = null;
+    set({ session: null, user: null, profile: null, initialized: false });
   },
 }));

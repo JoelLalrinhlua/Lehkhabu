@@ -330,7 +330,7 @@ export function subscribeToNotifications(
   onNew: (notification: Notification) => void
 ) {
   return supabase
-    .channel(`notifications:${userId}-${Math.random()}`)
+    .channel(`notifications:${userId}`)
     .on(
       'postgres_changes',
       {
@@ -350,7 +350,7 @@ export function subscribeToUserRole(
   onRoleChange: (newRole: string) => void
 ) {
   return supabase
-    .channel(`user-role:${userId}-${Math.random()}`)
+    .channel(`user-role:${userId}`)
     .on(
       'postgres_changes',
       {
@@ -374,7 +374,7 @@ export function subscribeToApplicationStatus(
   onStatusChange: (status: ApplicationStatus, adminNotes?: string) => void
 ) {
   return supabase
-    .channel(`application:${userId}-${Math.random()}`)
+    .channel(`application:${userId}`)
     .on(
       'postgres_changes',
       {

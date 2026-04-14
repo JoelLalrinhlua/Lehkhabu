@@ -193,7 +193,7 @@ export default function DashboardPage() {
         <div className="announcement-banner animate-fade-in-up stagger-3" style={{ marginBottom: 'var(--space-md)', borderColor: 'var(--color-blue)30', background: 'rgba(79,142,247,0.06)' }}>
           <Clock size={16} style={{ color: 'var(--color-blue)', flexShrink: 0 }} />
           <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-            <strong style={{ color: 'var(--color-blue)' }}>{stats?.pendingApplications} author application{stats!.pendingApplications > 1 ? 's' : ''}</strong> pending —&nbsp;
+            <strong style={{ color: 'var(--color-blue)' }}>{stats?.pendingApplications} author application{(stats?.pendingApplications ?? 0) > 1 ? 's' : ''}</strong> pending —&nbsp;
           </span>
           <Link to="/applications" style={{ color: 'var(--color-blue)', fontWeight: 600, textDecoration: 'underline' }}>
             Review now →

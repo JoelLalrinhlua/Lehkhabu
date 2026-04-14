@@ -55,29 +55,36 @@ export interface AdminApplication {
 
 /** Fetch all users (admin only — requires Admin SELECT RLS policy) */
 export async function fetchUsers(): Promise<AdminUser[]> {
-  const { data, error } = await supabase
-    .from('users')
-    .select(
-      'id, email, username, full_name, role, is_active, is_email_verified, avatar_url, bio, followers_count, following_count, created_at, updated_at'
-    )
-    .order('created_at', { ascending: false });
+  // Run both queries in parallel to eliminate sequential loading delay
+  const [usersRes, purchaseRes] = await Promise.all([
+    supabase
+      .from('users')
+      .select(
+        'id, email, username, full_name, role, is_active, is_email_verified, avatar_url, bio, followers_count, following_count, created_at, updated_at'
+      )
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('purchases')
+      .select('user_id, amount')
+      .eq('status', 'COMPLETED'),
+  ]);
 
-  if (error) throw error;
+  if (usersRes.error) throw usersRes.error;
 
-  // Fetch purchase stats per user
-  const { data: purchaseData } = await supabase
-    .from('purchases')
-    .select('user_id, amount, status')
-    .eq('status', 'COMPLETED');
-
+  // Aggregate purchase stats per user from parallel response
   const statsByUser: Record<string, { count: number; spent: number }> = {};
-  (purchaseData ?? []).forEach((p: any) => {
+  (purchaseRes.data ?? []).forEach((p: { user_id: string; amount: number | null }) => {
     if (!statsByUser[p.user_id]) statsByUser[p.user_id] = { count: 0, spent: 0 };
     statsByUser[p.user_id].count += 1;
     statsByUser[p.user_id].spent += p.amount ?? 0;
   });
 
-  return (data ?? []).map((u: any): AdminUser => ({
+  return (usersRes.data ?? []).map((u: {
+    id: string; email: string; username: string; full_name: string;
+    role: AdminUser['role']; is_active: boolean; is_email_verified: boolean;
+    avatar_url?: string; bio?: string; followers_count?: number;
+    following_count?: number; created_at: string; updated_at: string;
+  }): AdminUser => ({
     id: u.id,
     email: u.email,
     username: u.username,
@@ -268,7 +275,7 @@ export async function rejectApplication(applicationId: string, adminNotes?: stri
 /** Subscribe to new/updated applications (admin real-time) */
 export function subscribeToApplicationChanges(onRefresh: () => void) {
   return supabase
-    .channel(`admin-apps-${Math.random()}`)
+    .channel('admin-apps-feed')
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'author_applications' },
@@ -280,7 +287,7 @@ export function subscribeToApplicationChanges(onRefresh: () => void) {
 /** Subscribe to user changes (role, active status) */
 export function subscribeToUserChanges(onRefresh: () => void) {
   return supabase
-    .channel(`admin-users-${Math.random()}`)
+    .channel('admin-users-feed')
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'users' },

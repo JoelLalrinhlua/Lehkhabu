@@ -16,40 +16,58 @@ export interface DashboardStats {
   activeAnnouncements: number;
 }
 
-/** Fetch all dashboard stats with single-pass queries */
+/** Fetch all dashboard stats using count-only queries (no row data transferred) */
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const [booksRes, usersRes, purchasesRes, applicationsRes, announcementsRes] = await Promise.all([
-    supabase.from('books').select('status'),
-    supabase.from('users').select('role, is_active'),
-    supabase.from('purchases').select('amount, status'),
-    supabase.from('author_applications').select('status'),
-    supabase.from('announcements').select('is_active'),
+  const [
+    totalBooksRes,
+    publishedRes,
+    pendingBooksRes,
+    draftRes,
+    rejectedRes,
+    totalUsersRes,
+    activeUsersRes,
+    totalAuthorsRes,
+    totalPurchasesRes,
+    pendingAppsRes,
+    totalAnnouncementsRes,
+    activeAnnouncementsRes,
+    revenueRes,
+  ] = await Promise.all([
+    supabase.from('books').select('*', { count: 'exact', head: true }),
+    supabase.from('books').select('*', { count: 'exact', head: true }).eq('status', 'PUBLISHED'),
+    supabase.from('books').select('*', { count: 'exact', head: true }).eq('status', 'PENDING_REVIEW'),
+    supabase.from('books').select('*', { count: 'exact', head: true }).eq('status', 'DRAFT'),
+    supabase.from('books').select('*', { count: 'exact', head: true }).eq('status', 'REJECTED'),
+    supabase.from('users').select('*', { count: 'exact', head: true }),
+    supabase.from('users').select('*', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'AUTHOR'),
+    supabase.from('purchases').select('*', { count: 'exact', head: true }).eq('status', 'COMPLETED'),
+    supabase.from('author_applications').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
+    supabase.from('announcements').select('*', { count: 'exact', head: true }),
+    supabase.from('announcements').select('*', { count: 'exact', head: true }).eq('is_active', true),
+    // Revenue still needs actual data — only completed purchases amount
+    supabase.from('purchases').select('amount').eq('status', 'COMPLETED'),
   ]);
 
-  const books = booksRes.data ?? [];
-  const users = usersRes.data ?? [];
-  const purchases = purchasesRes.data ?? [];
-  const applications = applicationsRes.data ?? [];
-  const announcements = announcementsRes.data ?? [];
-
-  const totalRevenue = purchases
-    .filter((p: any) => p.status === 'COMPLETED')
-    .reduce((s: number, p: any) => s + (p.amount ?? 0), 0);
+  const totalRevenue = (revenueRes.data ?? []).reduce(
+    (s: number, p: { amount: number | null }) => s + (p.amount ?? 0),
+    0
+  );
 
   return {
-    totalBooks: books.length,
-    publishedBooks: books.filter((b: any) => b.status === 'PUBLISHED').length,
-    pendingBooks: books.filter((b: any) => b.status === 'PENDING_REVIEW').length,
-    draftBooks: books.filter((b: any) => b.status === 'DRAFT').length,
-    rejectedBooks: books.filter((b: any) => b.status === 'REJECTED').length,
-    totalUsers: users.length,
-    activeUsers: users.filter((u: any) => u.is_active).length,
-    totalAuthors: users.filter((u: any) => u.role === 'AUTHOR').length,
-    totalPurchases: purchases.filter((p: any) => p.status === 'COMPLETED').length,
+    totalBooks:           totalBooksRes.count         ?? 0,
+    publishedBooks:       publishedRes.count          ?? 0,
+    pendingBooks:         pendingBooksRes.count        ?? 0,
+    draftBooks:           draftRes.count              ?? 0,
+    rejectedBooks:        rejectedRes.count           ?? 0,
+    totalUsers:           totalUsersRes.count         ?? 0,
+    activeUsers:          activeUsersRes.count        ?? 0,
+    totalAuthors:         totalAuthorsRes.count       ?? 0,
+    totalPurchases:       totalPurchasesRes.count     ?? 0,
     totalRevenue,
-    pendingApplications: applications.filter((a: any) => a.status === 'PENDING').length,
-    totalAnnouncements: announcements.length,
-    activeAnnouncements: announcements.filter((a: any) => a.is_active).length,
+    pendingApplications:  pendingAppsRes.count        ?? 0,
+    totalAnnouncements:   totalAnnouncementsRes.count ?? 0,
+    activeAnnouncements:  activeAnnouncementsRes.count ?? 0,
   };
 }
 
