@@ -6,8 +6,13 @@ The limiter is created here as a module-level singleton so that route
 decorators like @limiter.limit("5/minute") can import it without circular
 dependencies.
 
-Redis is used as the backend when REDIS_URL is set; otherwise the limiter
-falls back to in-memory storage (suitable for development only).
+Storage backend:
+  - Redis (via REDIS_URL setting) is used in production for accurate
+    cross-process counting.
+  - Falls back to in-memory storage when REDIS_URL is unset or blank,
+    which is suitable for development and single-process deployments.
+
+Global cap: 200 requests/minute/IP (before per-route limits apply).
 """
 
 from slowapi import Limiter
@@ -17,6 +22,7 @@ from app.core.config import settings
 
 limiter = Limiter(
     key_func=get_remote_address,
-    storage_uri=settings.REDIS_URL,
+    # Use Redis in prod; fall back to in-memory for local dev (no Redis needed)
+    storage_uri=settings.REDIS_URL if settings.REDIS_URL else "memory://",
     default_limits=["200/minute"],  # Global safety cap per IP
 )
