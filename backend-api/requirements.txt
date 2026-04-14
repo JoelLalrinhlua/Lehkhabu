@@ -15,16 +15,18 @@ psycopg2-binary>=2.9,<3.0   # sync driver (Alembic migrations only)
 alembic>=1.13,<2.0
 
 # --- Validation & config ---
-pydantic>=2.7,<3.0
+pydantic[email]>=2.7,<3.0
 pydantic-settings>=2.3,<3.0
 python-multipart>=0.0.9,<1.0  # form data / file uploads
 
 # --- Security ---
 PyJWT[crypto]>=2.8,<3.0     # JWT (replaces python-jose — fewer CVEs)
 passlib[bcrypt]>=1.7,<2.0   # bcrypt password hashing
+bcrypt==3.2.2               # Pinned due to passlib bug with bcrypt>=4.0.0
 
 # --- Rate limiting ---
 slowapi>=0.1.9,<1.0          # slowapi wraps `limits` for FastAPI
+redis>=5.0,<6.0              # Redis backend for rate limiting
 
 # --- Payments ---
 razorpay>=1.4,<2.0
