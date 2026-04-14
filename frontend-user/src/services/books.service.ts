@@ -215,7 +215,7 @@ export async function removeShelfEntry(userId: string, bookId: string) {
 
 /* ── READING PROGRESS ─────────────────────────────────────────── */
 
-/** Get reading progress for a book */
+/** Get reading progress for a specific book */
 export async function fetchReadingProgress(userId: string, bookId: string) {
   const { data, error } = await supabase
     .from('reading_progress')
@@ -225,6 +225,16 @@ export async function fetchReadingProgress(userId: string, bookId: string) {
     .maybeSingle();
   if (error) throw error;
   return data as ReadingProgress | null;
+}
+
+/** Get all reading progress entries for a user (used for homepage dashboard) */
+export async function fetchAllReadingProgress(userId: string): Promise<ReadingProgress[]> {
+  const { data, error } = await supabase
+    .from('reading_progress')
+    .select('*')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as ReadingProgress[];
 }
 
 /** Save/update reading progress */

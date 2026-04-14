@@ -5,8 +5,7 @@ import {
   fetchUserShelf,
   upsertShelfEntry,
   removeShelfEntry,
-  fetchReadingProgress,
-  checkPurchase,
+  fetchAllReadingProgress,
   fetchUserPurchases,
 } from '../services/books.service';
 
@@ -59,7 +58,7 @@ export const useBooksStore = create<BooksState>((set, get) => ({
       const [shelfData, purchasesData, progressData] = await Promise.all([
         fetchUserShelf(userId),
         fetchUserPurchases(userId),
-        fetchReadingProgress(userId),
+        fetchAllReadingProgress(userId),
       ]);
 
       const purchasedBookIds = purchasesData.map(
