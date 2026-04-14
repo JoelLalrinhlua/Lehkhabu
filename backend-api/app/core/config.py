@@ -28,7 +28,7 @@ class Settings(BaseSettings):
         )
 
     # ── Redis ────────────────────────────────────────
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = ""
 
     # ── JWT ──────────────────────────────────────────
     # SECURITY: This MUST be set to a strong random value in production.
