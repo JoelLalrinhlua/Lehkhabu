@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useNotifications } from '../../hooks/useNotifications';
 
+/* Only 4 nav items — Author Dashboard access lives in Profile page */
 const NAV_ITEMS = [
   {
     to: '/', label: 'Home', end: true,
@@ -44,16 +45,6 @@ const NAV_ITEMS = [
     ),
   },
 ];
-
-const AUTHOR_NAV = {
-  to: '/author', label: 'Author', end: false,
-  icon: (_active: boolean) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-    </svg>
-  ),
-};
 
 function NotificationBell() {
   const navigate = useNavigate();
@@ -125,9 +116,6 @@ export default function AppLayout() {
   const { profile } = useAuthStore();
   const navigate = useNavigate();
   const { approvalPopup, dismissPopup } = useNotifications();
-
-  const isAuthor = profile?.role === 'AUTHOR' || profile?.role === 'ADMIN';
-  const navItems = isAuthor ? [...NAV_ITEMS, AUTHOR_NAV] : NAV_ITEMS;
 
   const displayInitial =
     profile?.full_name?.[0]?.toUpperCase() ??
@@ -208,9 +196,9 @@ export default function AppLayout() {
         <Outlet />
       </main>
 
-      {/* ── Bottom Navigation ─────────────────────────────────────── */}
+      {/* ── Bottom Navigation (4 items, no Author) ─────────────── */}
       <nav className="bottom-nav" role="navigation" aria-label="Main navigation">
-        {navItems.map((item) => (
+        {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

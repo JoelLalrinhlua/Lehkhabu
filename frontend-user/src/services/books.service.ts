@@ -155,7 +155,7 @@ export async function fetchUserShelf(userId: string, shelf?: ShelfEntry['shelf']
         cover_color_primary, cover_color_secondary, average_rating,
         price, is_free, total_pages, status, slug, description,
         language, tags, rating_count, purchase_count,
-        cover_color_secondary, published_at, created_at,
+        published_at, created_at,
         author_profiles (
           pen_name,
           users (full_name, username)
@@ -289,40 +289,4 @@ export async function fetchUserPurchases(userId: string) {
   return data ?? [];
 }
 
-/* ── AUTHOR APPLICATIONS ──────────────────────────────────────── */
-
-/** Submit an author application */
-export async function submitAuthorApplication(payload: {
-  userId: string;
-  writingSample: string;
-  motivation: string;
-  genre: string;
-  socialLinks?: string;
-}) {
-  const { data, error } = await supabase
-    .from('author_applications')
-    .insert({
-      user_id: payload.userId,
-      writing_sample: payload.writingSample,
-      motivation: payload.motivation,
-      genre: payload.genre,
-      social_links: payload.socialLinks,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-/** Get the latest application for a user */
-export async function fetchUserApplication(userId: string) {
-  const { data, error } = await supabase
-    .from('author_applications')
-    .select('*')
-    .eq('user_id', userId)
-    .order('submitted_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-}
+// Author application helpers live in author.service.ts to avoid duplication.

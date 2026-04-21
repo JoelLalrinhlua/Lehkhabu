@@ -3,18 +3,158 @@ import { useAuthStore } from '../store/authStore';
 import { useBooksStore } from '../store/booksStore';
 import { signOut } from '../services/auth.service';
 import { fetchMyApplication } from '../services/author.service';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import './ProfilePage.css';
+
+/* ── Achievement definitions (module-level, never re-created) ── */
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  bgGradient: string;
+  category: 'reading' | 'social' | 'author' | 'streak' | 'explorer';
+  check: (ctx: AchievementContext) => boolean;
+}
+
+export interface AchievementContext {
+  readCount: number;
+  readingCount: number;
+  wantCount: number;
+  purchaseCount: number;
+  isAuthor: boolean;
+  daysSinceMember: number;
+  totalShelf: number;
+  categories: Set<string>;
+}
+
+export const ALL_ACHIEVEMENTS: Achievement[] = [
+  {
+    id: 'early_adopter', title: 'Early Adopter', description: 'One of the first members of Lehkhabu',
+    icon: '🌟', color: '#F59E0B', bgGradient: 'linear-gradient(135deg, #F59E0B, #D97706)',
+    category: 'streak', check: () => true,
+  },
+  {
+    id: 'first_book', title: 'First Chapter', description: 'Added your first book to the shelf',
+    icon: '📗', color: '#10B981', bgGradient: 'linear-gradient(135deg, #10B981, #059669)',
+    category: 'reading', check: (c) => c.totalShelf >= 1,
+  },
+  {
+    id: 'bookworm', title: 'Bookworm', description: 'Read 3 books cover to cover',
+    icon: '🐛', color: '#8B5CF6', bgGradient: 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
+    category: 'reading', check: (c) => c.readCount >= 3,
+  },
+  {
+    id: 'avid_reader', title: 'Avid Reader', description: 'Completed reading 10 books',
+    icon: '📚', color: '#EC4899', bgGradient: 'linear-gradient(135deg, #EC4899, #DB2777)',
+    category: 'reading', check: (c) => c.readCount >= 10,
+  },
+  {
+    id: 'collector', title: 'Collector', description: 'Added 5 books to your Want to Read list',
+    icon: '🔖', color: '#3B82F6', bgGradient: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+    category: 'reading', check: (c) => c.wantCount >= 5,
+  },
+  {
+    id: 'genre_explorer', title: 'Genre Explorer', description: 'Explored books across 3+ different categories',
+    icon: '🗺️', color: '#F97316', bgGradient: 'linear-gradient(135deg, #F97316, #EA580C)',
+    category: 'explorer', check: (c) => c.categories.size >= 3,
+  },
+  {
+    id: 'purchaser', title: 'Supporter', description: 'Purchased your first book to support an author',
+    icon: '🛍️', color: '#14B8A6', bgGradient: 'linear-gradient(135deg, #14B8A6, #0D9488)',
+    category: 'social', check: (c) => c.purchaseCount >= 1,
+  },
+  {
+    id: 'author', title: 'Author', description: 'Became a verified Lehkhabu author',
+    icon: '✍️', color: '#6366F1', bgGradient: 'linear-gradient(135deg, #6366F1, #4F46E5)',
+    category: 'author', check: (c) => c.isAuthor,
+  },
+  {
+    id: 'veteran', title: 'Veteran', description: 'Been a member for 30+ days',
+    icon: '🏅', color: '#EF4444', bgGradient: 'linear-gradient(135deg, #EF4444, #DC2626)',
+    category: 'streak', check: (c) => c.daysSinceMember >= 30,
+  },
+  {
+    id: 'shelf_master', title: 'Shelf Master', description: 'Have 20+ books across all shelves',
+    icon: '🏆', color: '#FBBF24', bgGradient: 'linear-gradient(135deg, #FBBF24, #F59E0B)',
+    category: 'reading', check: (c) => c.totalShelf >= 20,
+  },
+  {
+    id: 'multitasker', title: 'Multitasker', description: 'Currently reading 3 or more books simultaneously',
+    icon: '🎯', color: '#A855F7', bgGradient: 'linear-gradient(135deg, #A855F7, #9333EA)',
+    category: 'reading', check: (c) => c.readingCount >= 3,
+  },
+  {
+    id: 'dedicated', title: 'Dedicated', description: 'Been a member for 90+ days',
+    icon: '💎', color: '#06B6D4', bgGradient: 'linear-gradient(135deg, #06B6D4, #0891B2)',
+    category: 'streak', check: (c) => c.daysSinceMember >= 90,
+  },
+];
+
+/* ── Small stat card (reusable) ── */
+function StatPill({ value, label, onClick }: { value: number | string; label: string; onClick?: () => void }) {
+  return (
+    <button className={`pp-stat-pill ${onClick ? 'pp-stat-clickable' : ''}`} onClick={onClick}>
+      <span className="pp-stat-value">{value}</span>
+      <span className="pp-stat-label">{label}</span>
+    </button>
+  );
+}
+
+/* ── Menu row ── */
+function MenuRow({
+  icon, title, subtitle, accent, onClick,
+}: { icon: string; title: string; subtitle?: string; accent?: string; onClick?: () => void }) {
+  return (
+    <button className="pp-menu-row" onClick={onClick} style={accent ? { '--row-accent': accent } as React.CSSProperties : undefined}>
+      <div className="pp-menu-icon" style={accent ? { background: `${accent}18`, color: accent } : undefined}>
+        {icon}
+      </div>
+      <div className="pp-menu-text">
+        <span className="pp-menu-title">{title}</span>
+        {subtitle && <span className="pp-menu-sub">{subtitle}</span>}
+      </div>
+      <svg className="pp-menu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+    </button>
+  );
+}
+
+/* ── Tiny hexagon achievement badge ── */
+function MiniHexBadge({ ach, unlocked }: { ach: Achievement; unlocked: boolean }) {
+  return (
+    <div
+      className={`pp-hex-badge ${unlocked ? 'pp-hex-unlocked' : 'pp-hex-locked'}`}
+      title={ach.title}
+      style={unlocked ? { '--badge-grad': ach.bgGradient } as React.CSSProperties : undefined}
+    >
+      <div className="pp-hex-inner">
+        {unlocked ? (
+          <span className="pp-hex-icon">{ach.icon}</span>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { profile } = useAuthStore();
-  const { shelf, purchases } = useBooksStore();
+  const { shelf, purchases, shelfLoading } = useBooksStore();
 
   const isAuthor = profile?.role === 'AUTHOR' || profile?.role === 'ADMIN';
-  const [applicationStatus, setApplicationStatus] = useState<'none'|'pending'|'approved'|'rejected'>('none');
+  const [applicationStatus, setApplicationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+  const [signingOut, setSigningOut] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // Fetch real application status from DB
+  // Fetch author application status for non-authors
   useEffect(() => {
     if (!profile?.id || isAuthor) return;
     fetchMyApplication(profile.id).then((app) => {
@@ -24,21 +164,52 @@ export default function ProfilePage() {
     }).catch(() => {});
   }, [profile?.id, isAuthor]);
 
-  // Shelf counts
-  const readCount = shelf.filter((s) => s.shelf === 'READ').length;
-  const readingCount = shelf.filter((s) => s.shelf === 'READING').length;
-  const wantCount = shelf.filter((s) => s.shelf === 'WANT_TO_READ').length;
+  // Derived stats
+  const readCount    = useMemo(() => shelf.filter((s) => s.shelf === 'READ').length, [shelf]);
+  const readingCount = useMemo(() => shelf.filter((s) => s.shelf === 'READING').length, [shelf]);
+  const wantCount    = useMemo(() => shelf.filter((s) => s.shelf === 'WANT_TO_READ').length, [shelf]);
+  const totalShelf   = shelf.length;
   const purchaseCount = purchases.length;
 
-  const [signingOut, setSigningOut] = useState(false);
+  // Days since member
+  const daysSinceMember = useMemo(() => {
+    if (!profile?.created_at) return 0;
+    return Math.floor((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24));
+  }, [profile?.created_at]);
+
+  // Categories explored (from shelf books)
+  const categoriesExplored = useMemo(() => {
+    const cats = new Set<string>();
+    shelf.forEach((entry) => {
+      const book = (entry.books as unknown as { category?: string } | null);
+      if (book?.category) cats.add(book.category);
+    });
+    return cats;
+  }, [shelf]);
+
+  // Achievement evaluation
+  const achCtx: AchievementContext = useMemo(() => ({
+    readCount, readingCount, wantCount, purchaseCount,
+    isAuthor, daysSinceMember, totalShelf, categories: categoriesExplored,
+  }), [readCount, readingCount, wantCount, purchaseCount, isAuthor, daysSinceMember, totalShelf, categoriesExplored]);
+
+  const unlockedAchs = useMemo(() =>
+    ALL_ACHIEVEMENTS.filter((a) => a.check(achCtx)), [achCtx]);
+  const lockedAchs   = useMemo(() =>
+    ALL_ACHIEVEMENTS.filter((a) => !a.check(achCtx)), [achCtx]);
+
+  // Reading goal progress
+  const readingGoal = 12;
+  const daysLeft = Math.ceil(
+    (new Date(new Date().getFullYear(), 11, 31).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  );
+  const goalPct = Math.min(100, Math.round((readCount / readingGoal) * 100));
 
   const handleSignOut = async () => {
     setSigningOut(true);
-    try {
-      await signOut();
-    } catch (err) {
-      console.error('Sign out error:', err);
-    } finally {
+    try { await signOut(); } catch (_) {}
+    finally {
+      useAuthStore.getState().clearAuth();
       window.location.href = '/auth';
     }
   };
@@ -47,17 +218,11 @@ export default function ProfilePage() {
     if (!profile) return;
     const url = `${window.location.origin}/u/${profile.username}`;
     if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${profile.full_name || profile.username}'s Lehkhabu Profile`,
-          url: url
-        });
-      } catch (err) {
-        // Handle cancel seamlessly
-      }
+      try { await navigator.share({ title: `${profile.full_name || profile.username} on Lehkhabu`, url }); } catch (_) {}
     } else {
-      navigator.clipboard.writeText(url);
-      alert('Profile link copied to clipboard!');
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -69,274 +234,333 @@ export default function ProfilePage() {
     );
   }
 
-  const daysLeft = Math.ceil(
-    (new Date(new Date().getFullYear(), 11, 31).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
-  
-  const readingGoal = 12; // Example static goal, could be dynamic
+  const memberYear = new Date(profile.created_at).getFullYear();
+  const joinedLabel = new Date(profile.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
 
   return (
-    <div className="page modern-profile-page">
-      
-      {/* ── Modern Profile Header ────────────────────────────── */}
-      <div className="modern-profile-header">
-        <div 
-          className="profile-header-bg"
+    <div className="pp-page">
+
+      {/* ═══ HERO HEADER ═══ */}
+      <div className="pp-hero">
+        {/* Background */}
+        <div
+          className="pp-hero-bg"
           style={profile.profile_bg_url ? {
             backgroundImage: `url(${profile.profile_bg_url})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat'
+            backgroundSize: 'cover', backgroundPosition: 'center',
           } : undefined}
         >
           {!profile.profile_bg_url && (
             <>
-              <div className="header-blob bg-blob-1"></div>
-              <div className="header-blob bg-blob-2"></div>
+              <div className="pp-blob pp-blob-1" />
+              <div className="pp-blob pp-blob-2" />
+              <div className="pp-blob pp-blob-3" />
             </>
           )}
+          <div className="pp-hero-overlay" />
+        </div>
 
-          {/* Share Button Overlay */}
-          <button className="cover-share-btn" onClick={handleShare} aria-label="Share Profile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-              <polyline points="16 6 12 2 8 6"></polyline>
-              <line x1="12" y1="2" x2="12" y2="15"></line>
-            </svg>
+        {/* Actions row */}
+        <div className="pp-hero-actions">
+          <button className="pp-icon-btn" onClick={handleShare} aria-label="Share profile">
+            {copied ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+            )}
           </button>
         </div>
-        
-        <div className="profile-header-content">
-          <div className="profile-header-avatar">
+
+        {/* Avatar + identity */}
+        <div className="pp-hero-identity">
+          <div className="pp-avatar-ring">
             {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt={profile.full_name} className="avatar-img" />
+              <img src={profile.avatar_url} alt={profile.full_name} className="pp-avatar-img" />
             ) : (
-              <div className="avatar-placeholder">
-                {profile.full_name?.[0]?.toUpperCase() || profile.username?.[0]?.toUpperCase() || '?'}
+              <div className="pp-avatar-placeholder">
+                {(profile.full_name?.[0] || profile.username?.[0] || '?').toUpperCase()}
               </div>
             )}
-            {isAuthor && <div className="avatar-author-badge">✍️</div>}
+            {isAuthor && <div className="pp-author-badge">✍️</div>}
           </div>
-          
-          <div className="profile-header-info">
-            <h1 className="profile-name">{profile.full_name || profile.username}</h1>
-            <div className="profile-handle">@{profile.username}</div>
-            {profile.bio && <p className="profile-bio">{profile.bio}</p>}
+          <div className="pp-identity-text">
+            <h1 className="pp-name">{profile.full_name || profile.username}</h1>
+            <div className="pp-handle">@{profile.username}</div>
+            {isAuthor && <div className="pp-role-chip">Author</div>}
           </div>
+        </div>
+
+        {/* Bio */}
+        {profile.bio && <p className="pp-bio">{profile.bio}</p>}
+
+        {/* Quick stats row */}
+        <div className="pp-quick-stats">
+          <StatPill value={readCount}    label="Read"     onClick={() => navigate('/library')} />
+          <div className="pp-stats-divider" />
+          <StatPill value={readingCount} label="Reading"  onClick={() => navigate('/library')} />
+          <div className="pp-stats-divider" />
+          <StatPill value={wantCount}    label="Wishlist"  onClick={() => navigate('/library')} />
+          <div className="pp-stats-divider" />
+          <StatPill value={unlockedAchs.length} label="Badges" onClick={() => navigate('/achievements')} />
         </div>
       </div>
 
-      {/* ── Stats Grid ───────────────────────────────────────── */}
-      <div className="profile-stats-grid">
-        <div className="stat-card" onClick={() => navigate('/library')}>
-          <div className="stat-icon book-read-icon">📗</div>
-          <div className="stat-info">
-            <div className="stat-number">{readCount}</div>
-            <div className="stat-label">Read</div>
-          </div>
-        </div>
-        <div className="stat-card" onClick={() => navigate('/library')}>
-          <div className="stat-icon book-reading-icon">📖</div>
-          <div className="stat-info">
-            <div className="stat-number">{readingCount}</div>
-            <div className="stat-label">Reading</div>
-          </div>
-        </div>
-        <div className="stat-card" onClick={() => navigate('/library')}>
-          <div className="stat-icon book-want-icon">🔖</div>
-          <div className="stat-info">
-            <div className="stat-number">{wantCount}</div>
-            <div className="stat-label">Want to Read</div>
-          </div>
-        </div>
-        <div className="stat-card" onClick={() => navigate('/library')}>
-          <div className="stat-icon book-purchased-icon">🛍️</div>
-          <div className="stat-info">
-            <div className="stat-number">{purchaseCount}</div>
-            <div className="stat-label">Purchased</div>
-          </div>
-        </div>
-      </div>
+      {/* ═══ BODY ═══ */}
+      <div className="pp-body">
 
-      <div className="profile-sections-wrapper">
-        
-        {/* ── Application / Author Card ──────────────────────── */}
-        <div className="profile-section">
-          {isAuthor ? (
-            <div className="action-card action-author" onClick={() => navigate('/author')}>
-              <div className="action-card-bg"></div>
-              <div className="action-card-content">
-                <div className="action-card-icon">✍️</div>
-                <div className="action-card-text">
+        {/* ── Author Section (only for authors/admins) ─────────── */}
+        {isAuthor && (
+          <section className="pp-section pp-section-author">
+            <button className="pp-author-card" onClick={() => navigate('/author')}>
+              <div className="pp-author-card-glow" />
+              <div className="pp-author-card-content">
+                <div className="pp-author-card-icon">
+                  <span>✍️</span>
+                </div>
+                <div className="pp-author-card-text">
                   <h3>Author Dashboard</h3>
-                  <p>Manage your published books and track lifetime earnings</p>
+                  <p>Manage books · track earnings · publish new stories</p>
                 </div>
-                <div className="action-card-arrow">→</div>
-              </div>
-            </div>
-          ) : applicationStatus === 'pending' ? (
-             <div className="action-card action-pending" onClick={() => navigate('/apply')}>
-               <div className="action-card-content">
-                 <div className="action-card-icon">⏳</div>
-                 <div className="action-card-text">
-                   <h3>Application Pending</h3>
-                   <p>Our team is currently reviewing your author submission</p>
-                 </div>
-                 <div className="action-card-arrow">→</div>
-               </div>
-             </div>
-          ) : applicationStatus === 'rejected' ? (
-             <div className="action-card action-rejected" onClick={() => navigate('/apply')}>
-               <div className="action-card-content">
-                 <div className="action-card-icon">❌</div>
-                 <div className="action-card-text">
-                   <h3>Application Not Approved</h3>
-                   <p>Tap here to revise your details and reapply to become an author</p>
-                 </div>
-                 <div className="action-card-arrow">→</div>
-               </div>
-             </div>
-          ) : (
-             <div className="action-card action-apply" onClick={() => navigate('/apply')}>
-               <div className="action-card-content">
-                 <div className="action-card-icon">🌟</div>
-                 <div className="action-card-text">
-                   <h3>Become an Author</h3>
-                   <p>Share your stories with the exclusive Mizo reader community</p>
-                 </div>
-                 <div className="action-card-arrow">→</div>
-               </div>
-             </div>
-          )}
-        </div>
-
-        {/* ── Wallet / Credits ───────────────────────────────── */}
-        <div className="profile-section">
-            <div className="action-card" style={{ background: 'linear-gradient(135deg, #2C3E50 0%, #3498DB 100%)', color: 'white', border: 'none' }}>
-              <div className="action-card-content" style={{ padding: '24px' }}>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ fontSize: '0.9rem', fontWeight: 600, opacity: 0.9, marginBottom: '8px', color: 'white' }}>Lehkhabu Wallet</h3>
-                  <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-heading)', color: 'white' }}>₹0.00</div>
-                  <button style={{ marginTop: '16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.4)', color: 'white', padding: '8px 20px', borderRadius: '24px', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', backdropFilter: 'blur(4px)' }}>
-                    + Add Funds
-                  </button>
-                </div>
-                <div style={{ fontSize: '3.5rem', opacity: 0.8, filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.2))' }}>💳</div>
-              </div>
-            </div>
-        </div>
-
-        {/* ── Settings Menu ──────────────────────────────────── */}
-        <div className="profile-menu-group">
-          <h2 className="menu-group-title">Settings</h2>
-          <div className="menu-list">
-            
-            <button className="menu-item" onClick={() => navigate('/profile/settings/profile')}>
-              <div className="menu-item-icon profile-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-              </div>
-              <div className="menu-item-content">
-                <div className="menu-item-title">Profile Settings</div>
-                <div className="menu-item-sub">Change name, bio, and avatar</div>
-              </div>
-              <div className="menu-item-arrow">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                <svg className="pp-author-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </div>
             </button>
+          </section>
+        )}
 
-            <button className="menu-item" onClick={() => navigate('/profile/settings/account')}>
-              <div className="menu-item-icon account-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
+        {/* ── Reading Challenge ─────────────────────────────────── */}
+        <section className="pp-section">
+          <div className="pp-section-header">
+            <span className="pp-section-title">📅 Reading Challenge</span>
+            <span className="pp-section-badge">{goalPct}%</span>
+          </div>
+          <div className="pp-challenge-card">
+            <div className="pp-challenge-top">
+              <div>
+                <div className="pp-challenge-books">
+                  <span className="pp-challenge-count">{readCount}</span>
+                  <span className="pp-challenge-goal"> / {readingGoal} books</span>
+                </div>
+                <div className="pp-challenge-year">{new Date().getFullYear()} Goal</div>
               </div>
-              <div className="menu-item-content">
-                <div className="menu-item-title">Account Settings</div>
-                <div className="menu-item-sub">Email, username, and security</div>
+              <div className="pp-challenge-days">
+                <span>{daysLeft}</span>
+                <small>days left</small>
               </div>
-              <div className="menu-item-arrow">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+            </div>
+            <div className="pp-challenge-track">
+              <div
+                className="pp-challenge-fill"
+                style={{ width: `${goalPct}%` }}
+              />
+            </div>
+            {goalPct === 100 && (
+              <div className="pp-challenge-congrats">🎉 Goal achieved! You're a reading champion.</div>
+            )}
+          </div>
+        </section>
+
+        {/* ── Achievements Preview ──────────────────────────────── */}
+        <section className="pp-section">
+          <div className="pp-section-header">
+            <span className="pp-section-title">🏆 Achievements</span>
+            <button className="pp-section-link" onClick={() => navigate('/achievements')}>
+              View all →
+            </button>
+          </div>
+          <div className="pp-achievements-strip">
+            {shelfLoading ? (
+              <div className="pp-ach-loading">Loading…</div>
+            ) : (
+              <>
+                {ALL_ACHIEVEMENTS.slice(0, 8).map((ach) => (
+                  <MiniHexBadge key={ach.id} ach={ach} unlocked={achCtx && ach.check(achCtx)} />
+                ))}
+              </>
+            )}
+          </div>
+          <div className="pp-ach-summary">
+            <span>{unlockedAchs.length} unlocked</span>
+            <span>·</span>
+            <span>{lockedAchs.length} remaining</span>
+          </div>
+        </section>
+
+        {/* ── Apply / Application Status (non-authors) ─────────── */}
+        {!isAuthor && (
+          <section className="pp-section">
+            {applicationStatus === 'pending' ? (
+              <button className="pp-apply-card pp-apply-pending" onClick={() => navigate('/apply')}>
+                <span className="pp-apply-icon">⏳</span>
+                <div className="pp-apply-text">
+                  <strong>Application Under Review</strong>
+                  <span>Our team is reviewing your submission</span>
+                </div>
+                <svg className="pp-menu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-              </div>
-            </button>
-
-          </div>
-        </div>
-        
-        {/* ── Reading Challenge ──────────────────────────────── */}
-        <div className="profile-menu-group">
-          <h2 className="menu-group-title">Activity</h2>
-          <div className="menu-list">
-            
-            <div className="reading-challenge-widget">
-              <div className="rc-header">
-                <div className="rc-title-wrap">
-                  <span className="rc-icon">🎯</span>
-                  <div className="rc-title">
-                    <h4>{new Date().getFullYear()} Reading Challenge</h4>
-                    <p>{readCount} of {readingGoal} books read</p>
-                  </div>
+              </button>
+            ) : applicationStatus === 'rejected' ? (
+              <button className="pp-apply-card pp-apply-rejected" onClick={() => navigate('/apply')}>
+                <span className="pp-apply-icon">❌</span>
+                <div className="pp-apply-text">
+                  <strong>Application Not Approved</strong>
+                  <span>Tap to revise and reapply</span>
                 </div>
-                <div className="rc-days-left">{daysLeft} days left</div>
-              </div>
-              <div className="rc-progress-bar">
-                <div 
-                  className="rc-progress-fill" 
-                  style={{ width: `${Math.min(100, (readCount / readingGoal) * 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            
-          </div>
-        </div>
-
-        {/* ── Achievements & Badges ─────────────────────────── */}
-        <div className="profile-menu-group">
-          <h2 className="menu-group-title">Achievements</h2>
-          <div className="menu-list" style={{ padding: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap', background: 'var(--color-white)' }}>
-            
-            <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(243, 156, 18, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '80px', border: '1px solid rgba(243, 156, 18, 0.2)', boxShadow: '0 4px 10px rgba(243, 156, 18, 0.05)', transition: 'transform 0.2s' }}>
-              <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(243, 156, 18, 0.3))' }}>🌟</span>
-              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#B9770E', textAlign: 'center', fontFamily: 'var(--font-heading)' }}>Early Adopter</span>
-            </div>
-
-            {readCount >= 1 && (
-              <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(46, 204, 113, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '80px', border: '1px solid rgba(46, 204, 113, 0.2)', boxShadow: '0 4px 10px rgba(46, 204, 113, 0.05)', transition: 'transform 0.2s' }}>
-                <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(46, 204, 113, 0.3))' }}>📚</span>
-                <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1E8449', textAlign: 'center', fontFamily: 'var(--font-heading)' }}>First Book</span>
-              </div>
+                <svg className="pp-menu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            ) : (
+              <button className="pp-apply-card pp-apply-cta" onClick={() => navigate('/apply')}>
+                <span className="pp-apply-icon">🌟</span>
+                <div className="pp-apply-text">
+                  <strong>Become an Author</strong>
+                  <span>Share your stories with the Mizo reading community</span>
+                </div>
+                <svg className="pp-menu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
             )}
+          </section>
+        )}
 
-            {isAuthor && (
-               <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(142, 68, 173, 0.15), rgba(142, 68, 173, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '80px', border: '1px solid rgba(142, 68, 173, 0.2)', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.05)', transition: 'transform 0.2s' }}>
-                 <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(142, 68, 173, 0.3))' }}>✍️</span>
-                 <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6C3483', textAlign: 'center', fontFamily: 'var(--font-heading)' }}>Author</span>
-               </div>
-            )}
-            
-            <div className="achievement-badge" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg, rgba(52, 152, 219, 0.15), rgba(52, 152, 219, 0.05))', padding: '16px 12px', borderRadius: '16px', flex: 1, minWidth: '100px', border: '1px solid rgba(52, 152, 219, 0.2)', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.05)', transition: 'transform 0.2s' }}>
-              <span style={{ fontSize: '28px', marginBottom: '8px', filter: 'drop-shadow(0 2px 4px rgba(52, 152, 219, 0.3))' }}>📅</span>
-              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#21618C', textAlign: 'center', fontFamily: 'var(--font-heading)', lineHeight: 1.2 }}>Member Since<br/>{new Date(profile.created_at).getFullYear()}</span>
-            </div>
-
+        {/* ── My Stats Breakdown ─────────────────────────────────── */}
+        <section className="pp-section">
+          <div className="pp-section-header">
+            <span className="pp-section-title">📊 My Stats</span>
           </div>
-        </div>
+          <div className="pp-stats-grid">
+            <div className="pp-stats-tile pp-tile-read">
+              <div className="pp-tile-num">{readCount}</div>
+              <div className="pp-tile-lbl">Books Read</div>
+            </div>
+            <div className="pp-stats-tile pp-tile-reading">
+              <div className="pp-tile-num">{readingCount}</div>
+              <div className="pp-tile-lbl">Currently Reading</div>
+            </div>
+            <div className="pp-stats-tile pp-tile-want">
+              <div className="pp-tile-num">{wantCount}</div>
+              <div className="pp-tile-lbl">Wish List</div>
+            </div>
+            <div className="pp-stats-tile pp-tile-purchased">
+              <div className="pp-tile-num">{purchaseCount}</div>
+              <div className="pp-tile-lbl">Purchased</div>
+            </div>
+            <div className="pp-stats-tile pp-tile-genres">
+              <div className="pp-tile-num">{categoriesExplored.size}</div>
+              <div className="pp-tile-lbl">Genres Explored</div>
+            </div>
+            <div className="pp-stats-tile pp-tile-days">
+              <div className="pp-tile-num">{daysSinceMember}</div>
+              <div className="pp-tile-lbl">Days as Member</div>
+            </div>
+          </div>
+        </section>
 
-        {/* ── Sign Out ────────────────────────────────────────── */}
-        <div className="profile-signout-wrapper" style={{ marginTop: '24px', padding: '0 16px 32px' }}>
-          <button
-            className="settings-signout-btn"
-            style={{ width: '100%', padding: '14px', borderRadius: '12px', background: '#ececec', color: '#e74c3c', fontWeight: '600', border: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-            onClick={handleSignOut}
-            disabled={signingOut}
-          >
+        {/* ── Account & Settings ─────────────────────────────────── */}
+        <section className="pp-section">
+          <div className="pp-section-header">
+            <span className="pp-section-title">⚙️ Settings</span>
+          </div>
+          <div className="pp-menu-card">
+            <MenuRow
+              icon="👤" title="Profile Settings" subtitle="Name, bio, avatar, cover photo"
+              accent="#3B82F6"
+              onClick={() => navigate('/profile/settings/profile')}
+            />
+            <MenuRow
+              icon="🔒" title="Account & Security" subtitle="Email, username, password"
+              accent="#10B981"
+              onClick={() => navigate('/profile/settings/account')}
+            />
+            <MenuRow
+              icon="🏆" title="Achievements" subtitle={`${unlockedAchs.length} of ${ALL_ACHIEVEMENTS.length} unlocked`}
+              accent="#F59E0B"
+              onClick={() => navigate('/achievements')}
+            />
+            <MenuRow
+              icon="📤" title="Share My Profile" subtitle={`lehkhabu.com/u/${profile.username}`}
+              accent="#8B5CF6"
+              onClick={handleShare}
+            />
+          </div>
+        </section>
+
+        {/* ── Account Info ───────────────────────────────────────── */}
+        <section className="pp-section">
+          <div className="pp-info-card">
+            <div className="pp-info-row">
+              <span className="pp-info-label">Email</span>
+              <span className="pp-info-value">{profile.email}</span>
+            </div>
+            <div className="pp-info-divider" />
+            <div className="pp-info-row">
+              <span className="pp-info-label">Member since</span>
+              <span className="pp-info-value">{joinedLabel}</span>
+            </div>
+            <div className="pp-info-divider" />
+            <div className="pp-info-row">
+              <span className="pp-info-label">Role</span>
+              <span className="pp-info-value pp-role-badge" data-role={profile.role}>{profile.role}</span>
+            </div>
+            {memberYear <= new Date().getFullYear() && (
+              <>
+                <div className="pp-info-divider" />
+                <div className="pp-info-row">
+                  <span className="pp-info-label">Member year</span>
+                  <span className="pp-info-value">{memberYear}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* ── Social Links ───────────────────────────────────────── */}
+        {profile.social_links && Object.values(profile.social_links).some(Boolean) && (
+          <section className="pp-section">
+            <div className="pp-section-header">
+              <span className="pp-section-title">🔗 Social Links</span>
+            </div>
+            <div className="pp-social-links">
+              {profile.social_links?.twitter && (
+                <a
+                  href={`https://twitter.com/${profile.social_links.twitter.replace('@', '')}`}
+                  target="_blank" rel="noreferrer"
+                  className="pp-social-chip"
+                >
+                  𝕏 {profile.social_links.twitter}
+                </a>
+              )}
+              {profile.social_links?.instagram && (
+                <a
+                  href={`https://instagram.com/${profile.social_links.instagram.replace('@', '')}`}
+                  target="_blank" rel="noreferrer"
+                  className="pp-social-chip"
+                >
+                  📸 {profile.social_links.instagram}
+                </a>
+              )}
+              {profile.social_links?.website && (
+                <a href={profile.social_links.website} target="_blank" rel="noreferrer" className="pp-social-chip">
+                  🌐 Website
+                </a>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── Sign Out ───────────────────────────────────────────── */}
+        <section className="pp-section pp-section-signout">
+          <button className="pp-signout-btn" onClick={handleSignOut} disabled={signingOut}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
               <polyline points="16 17 21 12 16 7" />
@@ -344,7 +568,8 @@ export default function ProfilePage() {
             </svg>
             {signingOut ? 'Signing out…' : 'Sign Out'}
           </button>
-        </div>
+          <p className="pp-version">Lehkhabu v1.0 · Made with ❤️ for Mizo readers</p>
+        </section>
 
       </div>
     </div>

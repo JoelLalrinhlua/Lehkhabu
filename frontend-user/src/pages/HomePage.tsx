@@ -208,6 +208,30 @@ function ContinueReadingCard({ entry, book }: { entry: ShelfEntry; book: Book })
   );
 }
 
+/* ── Section Header ─────────────────────────────────── */
+function SectionHeader({
+  title,
+  sectionKey,
+  isExpanded,
+  onToggle,
+}: {
+  title: string;
+  sectionKey?: string;
+  isExpanded?: boolean;
+  onToggle?: (key: string) => void;
+}) {
+  return (
+    <div className="hb-section-header">
+      <span>{title}</span>
+      {sectionKey && onToggle && (
+        <button onClick={() => onToggle(sectionKey)}>
+          {isExpanded ? 'Collapse' : 'View more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ── Main HomePage ──────────────────────────────────────── */
 export default function HomePage() {
   const navigate = useNavigate();
@@ -258,26 +282,6 @@ export default function HomePage() {
   const newArrivals = [...books]
     .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
     .slice(0, 8);
-
-  /* Section header helper ────────────────────────────── */
-  const SectionHeader = ({
-    title,
-    sectionKey,
-    isExpanded
-  }: {
-    title: string;
-    sectionKey?: string;
-    isExpanded?: boolean;
-  }) => (
-    <div className="hb-section-header">
-      <span>{title}</span>
-      {sectionKey && (
-        <button onClick={() => toggleSection(sectionKey)}>
-          {isExpanded ? 'Collapse' : 'View more'}
-        </button>
-      )}
-    </div>
-  );
 
   return (
     <div className="hb-page">
@@ -335,7 +339,7 @@ export default function HomePage() {
       {/* ── Recommended for You ──────────────────────────── */}
       {!booksLoading && recommended.length > 0 && (
         <div style={{ animation: 'fadeInUp 0.6s ease both', animationDelay: '0.1s' }}>
-          <SectionHeader title="Recommended for You ✨" sectionKey="recommended" isExpanded={expandedSections['recommended']} />
+          <SectionHeader title="Recommended for You ✨" sectionKey="recommended" isExpanded={expandedSections['recommended']} onToggle={toggleSection} />
           {expandedSections['recommended'] ? (
             <div className="hb-grid">
                {recommended.map(book => <GridBookCard key={book.id} book={book} userId={userId} />)}
@@ -363,7 +367,7 @@ export default function HomePage() {
       {/* ── Popular Books Grid ───────────────────────────── */}
       {!booksLoading && popular.length > 0 && (
         <div style={{ animation: 'fadeInUp 0.6s ease both', animationDelay: '0.5s' }}>
-          <SectionHeader title="Popular This Week 🏆" sectionKey="popular" isExpanded={expandedSections['popular']} />
+          <SectionHeader title="Popular This Week 🏆" sectionKey="popular" isExpanded={expandedSections['popular']} onToggle={toggleSection} />
           {expandedSections['popular'] ? (
             <div className="hb-grid">
                {popular.map(book => <GridBookCard key={book.id} book={book} userId={userId} />)}
@@ -377,7 +381,7 @@ export default function HomePage() {
       {/* ── New Arrivals ─────────────────────────────────── */}
       {!booksLoading && newArrivals.length > 0 && (
         <div style={{ animation: 'fadeInUp 0.6s ease both', animationDelay: '0.7s' }}>
-          <SectionHeader title="New Arrivals 🆕" sectionKey="new-arrivals" isExpanded={expandedSections['new-arrivals']} />
+          <SectionHeader title="New Arrivals 🆕" sectionKey="new-arrivals" isExpanded={expandedSections['new-arrivals']} onToggle={toggleSection} />
           {expandedSections['new-arrivals'] ? (
             <div className="hb-grid">
                {newArrivals.map(book => <GridBookCard key={book.id} book={book} userId={userId} />)}

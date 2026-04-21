@@ -329,8 +329,9 @@ export function subscribeToNotifications(
   userId: string,
   onNew: (notification: Notification) => void
 ) {
+  const channelId = `notifications:${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   return supabase
-    .channel(`notifications:${userId}`)
+    .channel(channelId)
     .on(
       'postgres_changes',
       {
@@ -349,8 +350,9 @@ export function subscribeToUserRole(
   userId: string,
   onRoleChange: (newRole: string) => void
 ) {
+  const channelId = `user-role:${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   return supabase
-    .channel(`user-role:${userId}`)
+    .channel(channelId)
     .on(
       'postgres_changes',
       {
@@ -373,8 +375,9 @@ export function subscribeToApplicationStatus(
   userId: string,
   onStatusChange: (status: ApplicationStatus, adminNotes?: string) => void
 ) {
+  const channelId = `application:${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   return supabase
-    .channel(`application:${userId}`)
+    .channel(channelId)
     .on(
       'postgres_changes',
       {

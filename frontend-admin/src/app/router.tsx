@@ -12,14 +12,20 @@ import AnnouncementsPage from '../features/analytics/AnnouncementsPage';
 import UISettingsPage from '../features/analytics/UISettingsPage';
 import SettingsPage from '../features/analytics/SettingsPage';
 import AdminAccountsPage from '../features/analytics/AdminAccountsPage';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 
 export const router = createBrowserRouter([
   // Standalone admin login — no layout wrapper
-  { path: '/login', element: <AdminLoginPage /> },
+  { 
+    path: '/login', 
+    element: <AdminLoginPage />,
+    errorElement: <ErrorBoundary />
+  },
 
   {
     path: '/',
     element: <AdminLayout />,
+    errorElement: <ErrorBoundary />,
     children: [
       { index: true,              element: <DashboardPage /> },
       { path: 'books',            element: <BooksPage /> },

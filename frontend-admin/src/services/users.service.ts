@@ -274,8 +274,9 @@ export async function rejectApplication(applicationId: string, adminNotes?: stri
 
 /** Subscribe to new/updated applications (admin real-time) */
 export function subscribeToApplicationChanges(onRefresh: () => void) {
+  const channelId = `admin-apps-feed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return supabase
-    .channel('admin-apps-feed')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'author_applications' },
@@ -286,8 +287,9 @@ export function subscribeToApplicationChanges(onRefresh: () => void) {
 
 /** Subscribe to user changes (role, active status) */
 export function subscribeToUserChanges(onRefresh: () => void) {
+  const channelId = `admin-users-feed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return supabase
-    .channel('admin-users-feed')
+    .channel(channelId)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'users' },

@@ -242,7 +242,7 @@ export default function UsersPage() {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className={`avatar avatar-md avatar-${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}>
-                          {(user.fullName ?? user.username ?? '?')[0].toUpperCase()}
+                          {(user.fullName || user.username || '?')[0].toUpperCase()}
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem' }}>
@@ -360,7 +360,7 @@ export default function UsersPage() {
             {/* Avatar + name */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
               <div className="avatar avatar-lg avatar-gold" style={{ width: 56, height: 56, fontSize: '1.3rem' }}>
-                {(viewUser.fullName ?? viewUser.username ?? '?')[0].toUpperCase()}
+                {(viewUser.fullName || viewUser.username || '?')[0].toUpperCase()}
               </div>
               <div>
                 <h2 style={{ fontSize: '1.15rem' }}>{viewUser.fullName}</h2>

@@ -96,7 +96,8 @@ export default function ExplorePage() {
 
   useEffect(() => {
     if (books.length === 0 && !booksLoading) loadBooks();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [books.length, booksLoading]);
 
   // Sync URL params
   useEffect(() => {

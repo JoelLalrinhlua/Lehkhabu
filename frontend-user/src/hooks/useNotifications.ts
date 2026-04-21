@@ -68,7 +68,7 @@ export function useNotifications(): UseNotificationsReturn {
     if (!userId) return;
     const channel = subscribeToApplicationStatus(userId, () => {
       // Re-fetch notifications to pick up any new ones
-      setTimeout(() => load(), 500);
+      load();
     });
     return () => { channel.unsubscribe(); };
   }, [userId, load]);
