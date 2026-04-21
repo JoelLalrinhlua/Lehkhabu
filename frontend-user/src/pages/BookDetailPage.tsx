@@ -74,8 +74,16 @@ export default function BookDetailPage() {
     }
   };
 
+  // Combine all tags / meta into pills
+  const allTags = [
+    ...book.tags,
+    book.category,
+    book.language,
+    book.total_pages ? `${book.total_pages} pages` : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="page book-detail">
+    <div className="page book-detail-v2">
       {/* Back */}
       <button className="book-detail-back" onClick={() => navigate(-1)}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -84,42 +92,32 @@ export default function BookDetailPage() {
         Back
       </button>
 
-      {/* Hero */}
-      <div className="book-detail-hero">
-        <BookCover book={book} className="book-detail-cover" />
+      {/* ── Hero split layout ────────────────────────────── */}
+      <div className="bdv2-hero">
+        {/* Left: text content */}
+        <div className="bdv2-info">
+          <h1 className="bdv2-title">{book.title}</h1>
+          {book.author_name && (
+            <div className="bdv2-author">{book.author_name}</div>
+          )}
 
-        <div className="book-detail-info">
-          {/* Tags */}
-          {book.tags.length > 0 && (
-            <div className="book-detail-tags">
-              {book.tags.map((tag) => (
-                <span key={tag} className="book-detail-tag">{tag}</span>
+          {/* Tags / pills */}
+          {allTags.length > 0 && (
+            <div className="bdv2-tags">
+              {allTags.map((tag) => (
+                <span key={tag} className="bdv2-tag">{tag}</span>
               ))}
             </div>
           )}
 
-          {/* Title & Author */}
-          <h1 className="book-detail-title">{book.title}</h1>
-          {book.author_name && (
-            <div className="book-detail-author">by {book.author_name}</div>
+          {/* Description */}
+          {book.description && (
+            <p className="bdv2-description">{book.description}</p>
           )}
-
-          {/* Meta */}
-          <div className="book-detail-meta-row">
-            {book.language && (
-              <span className="book-detail-meta-pill">{book.language}</span>
-            )}
-            {book.total_pages && (
-              <span className="book-detail-meta-pill">{book.total_pages} pages</span>
-            )}
-            {book.category && (
-              <span className="book-detail-meta-pill">{book.category}</span>
-            )}
-          </div>
 
           {/* Rating */}
           {book.average_rating > 0 && (
-            <div className="book-detail-rating">
+            <div className="bdv2-rating">
               <div className="book-detail-stars">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <svg
@@ -139,47 +137,52 @@ export default function BookDetailPage() {
             </div>
           )}
 
-          {/* CTA */}
-          <div className="book-detail-cta">
+          {/* CTA buttons */}
+          <div className="bdv2-cta">
             {owned ? (
-              <button className="btn-primary" onClick={() => navigate(`/read/${book.id}`)}>
+              <button className="bdv2-btn-read" onClick={() => navigate(`/read/${book.id}`)}>
                 📖 Read Now
               </button>
             ) : book.is_free ? (
-              <button className="btn-primary" onClick={() => navigate(`/read/${book.id}`)}>
+              <button className="bdv2-btn-read" onClick={() => navigate(`/read/${book.id}`)}>
                 📖 Read Free
               </button>
             ) : (
-              <button className="btn-primary" disabled title="Payments coming soon">
-                🛒 Buy — ₹{book.price}
-              </button>
+              <>
+                <div className="bdv2-price-btn bdv2-price-ebook">
+                  <span className="bdv2-price-label">E-book</span>
+                  <span className="bdv2-price-value">₹{Math.round(book.price * 0.45)}</span>
+                </div>
+              </>
             )}
 
             <button
-              className={`btn-outline ${inWishlist ? 'btn-outline-active' : ''}`}
+              className={`bdv2-wishlist-btn ${inWishlist ? 'active' : ''}`}
               onClick={handleWishlist}
               disabled={wishlistLoading}
+              title={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
             >
-              {inWishlist ? '🔖 Wishlisted' : '🔖 Wishlist'}
+              <svg viewBox="0 0 24 24" fill={inWishlist ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
             </button>
           </div>
         </div>
+
+        {/* Right: book cover */}
+        <div className="bdv2-cover-col">
+          {/* Decorative dots */}
+          <div className="bdv2-dot bdv2-dot-1" />
+          <div className="bdv2-dot bdv2-dot-2" />
+          <div className="bdv2-dot bdv2-dot-3" />
+          <BookCover book={book} className="bdv2-cover" />
+        </div>
       </div>
 
-      {/* Description */}
-      {book.description && (
-        <div className="book-detail-description">
-          <h3>About this Book</h3>
-          <p>{book.description}</p>
-        </div>
-      )}
-
-      {/* Related Books */}
+      {/* ── You may like ─────────────────────────────────── */}
       {relatedBooks.length > 0 && (
-        <div className="recommendation-section" style={{ marginTop: 'var(--space-2xl)' }}>
-          <div className="section-header">
-            <h2>You Might Also Like</h2>
-          </div>
+        <div className="bdv2-related">
+          <h2 className="bdv2-related-title">You may like</h2>
           <div className="recommendation-scroll">
             {relatedBooks.map((b) => <BookCard key={b.id} book={b} />)}
           </div>

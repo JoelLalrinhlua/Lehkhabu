@@ -1053,9 +1053,263 @@
 }
 
 /* â”€â”€ Book Detail Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Book Detail v2 (matches reference layout) ────────────────────── */
+.book-detail-v2 {
+  animation: fadeIn var(--duration-slow) var(--ease-smooth);
+  padding-bottom: var(--space-3xl);
+}
+
+/* Hero: two-column split */
+.bdv2-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2xl);
+  margin-bottom: var(--space-3xl);
+  position: relative;
+}
+
+/* Left column — text */
+.bdv2-info {
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--space-md);
+}
+
+.bdv2-title {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-bottom: var(--space-sm);
+  color: var(--color-dark);
+  letter-spacing: -0.5px;
+}
+
+.bdv2-author {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-md);
+  font-weight: 400;
+}
+
+/* Tag pills */
+.bdv2-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.bdv2-tag {
+  padding: 5px 14px;
+  background: var(--color-cream-dark);
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-gray-700);
+  font-family: var(--font-heading);
+  border: 1px solid rgba(0,0,0,0.06);
+  transition: background var(--duration-fast);
+}
+
+.bdv2-tag:hover {
+  background: var(--color-sand);
+}
+
+/* Description */
+.bdv2-description {
+  font-size: 0.93rem;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+  max-width: 48ch;
+}
+
+/* Rating row */
+.bdv2-rating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+/* CTA row */
+.bdv2-cta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+/* Read button */
+.bdv2-btn-read {
+  padding: 12px 28px;
+  background: var(--color-terracotta);
+  color: white;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  transition: all var(--duration-normal) var(--ease-smooth);
+  box-shadow: 0 4px 16px rgba(193, 120, 23, 0.35);
+}
+.bdv2-btn-read:hover {
+  background: var(--color-terracotta-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(193, 120, 23, 0.4);
+}
+.bdv2-btn-read:active { transform: scale(0.96); }
+
+/* Price pill buttons (two-line: label + price) */
+.bdv2-price-btn {
+  padding: 10px 22px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  cursor: default;
+  min-width: 96px;
+}
+
+.bdv2-price-label {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.85;
+  letter-spacing: 0.2px;
+}
+
+.bdv2-price-value {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.bdv2-price-paperback {
+  background: var(--color-cream-dark);
+  color: var(--color-terracotta-dark);
+  border: 1.5px solid rgba(193,120,23,0.2);
+}
+
+.bdv2-price-ebook {
+  background: var(--color-sage-light);
+  color: var(--color-sage-dark);
+  border: 1.5px solid rgba(107,158,96,0.25);
+}
+
+/* Wishlist icon button */
+.bdv2-wishlist-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-medium);
+  color: var(--text-muted);
+  transition: all var(--duration-normal) var(--ease-smooth);
+  flex-shrink: 0;
+}
+.bdv2-wishlist-btn svg { width: 20px; height: 20px; }
+.bdv2-wishlist-btn:hover {
+  border-color: var(--color-terracotta);
+  color: var(--color-terracotta);
+  background: rgba(193, 120, 23, 0.07);
+}
+.bdv2-wishlist-btn.active {
+  border-color: var(--color-terracotta);
+  color: var(--color-terracotta);
+  background: rgba(193, 120, 23, 0.1);
+}
+
+/* Right column — cover */
+.bdv2-cover-col {
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+
+.bdv2-cover {
+  width: 220px !important;
+  height: 320px !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  box-shadow: 12px 16px 40px rgba(0,0,0,0.18), 2px 4px 12px rgba(0,0,0,0.08) !important;
+  animation: float 5s ease-in-out infinite !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* Decorative dots */
+.bdv2-dot {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.35;
+}
+.bdv2-dot-1 {
+  width: 12px; height: 12px;
+  background: var(--color-terracotta);
+  top: 20px; right: 24px;
+}
+.bdv2-dot-2 {
+  width: 8px; height: 8px;
+  background: var(--color-amber);
+  top: 50px; right: 10px;
+}
+.bdv2-dot-3 {
+  width: 6px; height: 6px;
+  background: var(--color-sage-dark);
+  bottom: 40px; left: 0;
+}
+
+/* "You may like" section */
+.bdv2-related {
+  margin-top: var(--space-2xl);
+}
+.bdv2-related-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-dark);
+  margin-bottom: var(--space-lg);
+}
+
+/* Responsive: stack vertically on mobile */
+@media (max-width: 600px) {
+  .bdv2-hero {
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: var(--space-xl);
+  }
+  .bdv2-cover-col {
+    width: 100%;
+    justify-content: center;
+    padding: var(--space-md) 0;
+  }
+  .bdv2-cover {
+    width: 180px !important;
+    height: 265px !important;
+  }
+  .bdv2-info {
+    text-align: center;
+    padding-top: 0;
+  }
+  .bdv2-tags { justify-content: center; }
+  .bdv2-cta { justify-content: center; }
+  .bdv2-description { max-width: 100%; }
+  .bdv2-title { font-size: 1.7rem; }
+}
+
+/* ── Book Detail Page (legacy) ─────────────────────────────────────── */
 .book-detail {
   animation: fadeIn var(--duration-slow) var(--ease-smooth);
 }
+
 
 .book-detail-back {
   display: flex;

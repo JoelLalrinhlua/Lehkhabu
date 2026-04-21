@@ -247,7 +247,8 @@ export default function ProfilePage() {
           className="pp-hero-bg"
           style={profile.profile_bg_url ? {
             backgroundImage: `url(${profile.profile_bg_url})`,
-            backgroundSize: 'cover', backgroundPosition: 'center',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
           } : undefined}
         >
           {!profile.profile_bg_url && (
@@ -335,42 +336,90 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {/* ── Reading Challenge ─────────────────────────────────── */}
+        {/* ── Reading Goals ───────────────────────────────────── */}
         <section className="pp-section">
           <div className="pp-section-header">
-            <span className="pp-section-title">📅 Reading Challenge</span>
-            <span className="pp-section-badge">{goalPct}%</span>
+            <span className="pp-section-title">Reading Goals</span>
+            <button className="pp-section-link" onClick={() => navigate('/library')}>
+              Library →
+            </button>
           </div>
-          <div className="pp-challenge-card">
-            <div className="pp-challenge-top">
-              <div>
-                <div className="pp-challenge-books">
-                  <span className="pp-challenge-count">{readCount}</span>
-                  <span className="pp-challenge-goal"> / {readingGoal} books</span>
-                </div>
-                <div className="pp-challenge-year">{new Date().getFullYear()} Goal</div>
-              </div>
-              <div className="pp-challenge-days">
-                <span>{daysLeft}</span>
-                <small>days left</small>
+          <div className="pp-goals-card">
+
+            {/* ── Arc gauge ── */}
+            <div className="pp-arc-wrap">
+              <svg className="pp-arc-svg" viewBox="0 0 200 110" fill="none">
+                {/* Track */}
+                <path
+                  d="M 20 100 A 80 80 0 0 1 180 100"
+                  stroke="#EDE9E3" strokeWidth="13" strokeLinecap="round"
+                />
+                {/* Fill — arc length of a 80px semicircle = π*80 ≈ 251.2 */}
+                <path
+                  d="M 20 100 A 80 80 0 0 1 180 100"
+                  stroke="url(#arcGrad)" strokeWidth="13" strokeLinecap="round"
+                  strokeDasharray="251.2"
+                  strokeDashoffset={251.2 - (251.2 * Math.min(goalPct, 100)) / 100}
+                  style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }}
+                />
+                <defs>
+                  <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#C17817" />
+                    <stop offset="100%" stopColor="#F5A623" />
+                  </linearGradient>
+                </defs>
+                {/* Center content */}
+                <text x="100" y="74" textAnchor="middle" fontSize="28" fontWeight="800" fill="#1A1A1A" fontFamily="Outfit,sans-serif">
+                  {readCount}
+                </text>
+                <text x="100" y="92" textAnchor="middle" fontSize="11" fill="#8B8B8B" fontFamily="Inter,sans-serif">
+                  of {readingGoal} books
+                </text>
+              </svg>
+              <div className="pp-arc-label">
+                <span className="pp-arc-goal-txt">{new Date().getFullYear()} Reading Goal</span>
+                <span className="pp-arc-days">{daysLeft} days left</span>
               </div>
             </div>
-            <div className="pp-challenge-track">
-              <div
-                className="pp-challenge-fill"
-                style={{ width: `${goalPct}%` }}
-              />
+
+            {/* ── Currently reading prompt ── */}
+            {readingCount > 0 && (
+              <button className="pp-keep-reading" onClick={() => navigate('/library')}>
+                <span className="pp-keep-reading-label">Keep Reading</span>
+                <span className="pp-keep-reading-sub">{readingCount} book{readingCount > 1 ? 's' : ''} in progress</span>
+              </button>
+            )}
+
+            {/* ── Weekly streak dots (S M T W T F S) ── */}
+            <div className="pp-streak-row">
+              {['S','M','T','W','T','F','S'].map((d, i) => {
+                const today = new Date().getDay(); // 0=Sun
+                const isToday = i === today;
+                const isYesterday = daysSinceMember >= 1 && i === (today - 1 + 7) % 7;
+                const active = isToday || isYesterday;
+                return (
+                  <div key={i} className={`pp-streak-dot ${active ? 'pp-streak-active' : ''} ${isToday ? 'pp-streak-today' : ''}`}>
+                    {d}
+                  </div>
+                );
+              })}
             </div>
-            {goalPct === 100 && (
+            <div className="pp-streak-label">
+              Your reading streak is <strong>{Math.min(daysSinceMember, 7)} day{daysSinceMember !== 1 ? 's' : ''}</strong>
+              {daysSinceMember >= 7 && <span className="pp-streak-record"> · New Record 🔥</span>}
+            </div>
+
+            {goalPct >= 100 && (
               <div className="pp-challenge-congrats">🎉 Goal achieved! You're a reading champion.</div>
             )}
           </div>
         </section>
 
+
         {/* ── Achievements Preview ──────────────────────────────── */}
         <section className="pp-section">
           <div className="pp-section-header">
-            <span className="pp-section-title">🏆 Achievements</span>
+            <span className="pp-section-title">Achievements</span>
             <button className="pp-section-link" onClick={() => navigate('/achievements')}>
               View all →
             </button>
@@ -436,7 +485,7 @@ export default function ProfilePage() {
         {/* ── My Stats Breakdown ─────────────────────────────────── */}
         <section className="pp-section">
           <div className="pp-section-header">
-            <span className="pp-section-title">📊 My Stats</span>
+            <span className="pp-section-title">My Stats</span>
           </div>
           <div className="pp-stats-grid">
             <div className="pp-stats-tile pp-tile-read">
@@ -469,7 +518,7 @@ export default function ProfilePage() {
         {/* ── Account & Settings ─────────────────────────────────── */}
         <section className="pp-section">
           <div className="pp-section-header">
-            <span className="pp-section-title">⚙️ Settings</span>
+            <span className="pp-section-title">Settings</span>
           </div>
           <div className="pp-menu-card">
             <MenuRow
@@ -528,7 +577,7 @@ export default function ProfilePage() {
         {profile.social_links && Object.values(profile.social_links).some(Boolean) && (
           <section className="pp-section">
             <div className="pp-section-header">
-              <span className="pp-section-title">🔗 Social Links</span>
+              <span className="pp-section-title">Social</span>
             </div>
             <div className="pp-social-links">
               {profile.social_links?.twitter && (
