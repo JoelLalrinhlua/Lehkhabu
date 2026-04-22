@@ -1,10 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
-import { router } from './app/router';
+import { router } from './router';
 import { useAuthStore } from './store/authStore';
-import './index.css';
-import './App.css';
+import './assets/styles/index.css';
+import './assets/styles/App.css';
 
 // Initialize auth session immediately (non-blocking)
 useAuthStore.getState().initialize();

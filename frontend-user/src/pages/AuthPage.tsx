@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { signIn, signUp } from '../services/auth.service';
-import './auth.css';
-
+import '../assets/styles/pages/auth.css';
 type Mode = 'login' | 'register' | 'forgot';
 
 const SPINES = [

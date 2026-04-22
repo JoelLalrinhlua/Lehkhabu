@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { useBooksStore } from '../store/booksStore';
 import type { Book, ShelfEntry } from '../services/books.service';
 import BookCover from '../components/common/BookCover';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 /* ── Tiny reusable heart button ─────────────────────────── */
 function HeartBtn({
@@ -243,6 +244,11 @@ export default function HomePage() {
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
+  usePageMeta({
+    title: 'Lehkhabu — Read, Discover, Collect',
+    description: 'Discover new books, continue reading, and explore curated collections on Lehkhabu — your AI-powered book marketplace.',
+  });
+
   useEffect(() => {
     if (books.length === 0 && !booksLoading) loadBooks();
   }, [books.length, booksLoading, loadBooks]);
@@ -276,7 +282,7 @@ export default function HomePage() {
     .slice(0, 6);
 
   // Currently Reading
-  const readingEntries = shelf.filter(s => s.shelf === 'READING' && s.books).slice(0, 3);
+  const readingEntries = shelf.filter(s => s.shelf === 'READING' && (s as unknown as { book?: unknown }).book).slice(0, 3);
 
   // New Arrivals (latest created_at)
   const newArrivals = [...books]
@@ -356,7 +362,7 @@ export default function HomePage() {
           <SectionHeader title="Continue Reading 📖" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {readingEntries.map((entry) => {
-              const book = entry.books as unknown as Book;
+              const book = (entry as unknown as { book?: Book }).book as Book;
               if (!book) return null;
               return <ContinueReadingCard key={entry.book_id} entry={entry} book={book} />;
             })}

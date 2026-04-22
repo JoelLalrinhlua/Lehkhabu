@@ -4,7 +4,6 @@ import { useAuthStore } from '../store/authStore';
 import { useBooksStore } from '../store/booksStore';
 import type { Book } from '../services/books.service';
 import BookCover from '../components/common/BookCover';
-import BookCard from '../components/common/BookCard';
 
 type Tab = 'shelves' | 'wishlist';
 

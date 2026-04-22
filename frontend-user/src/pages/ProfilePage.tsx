@@ -4,8 +4,7 @@ import { useBooksStore } from '../store/booksStore';
 import { signOut } from '../services/auth.service';
 import { fetchMyApplication } from '../services/author.service';
 import { useState, useEffect, useMemo } from 'react';
-import './ProfilePage.css';
-
+import '../assets/styles/pages/ProfilePage.css';
 /* ── Achievement definitions (module-level, never re-created) ── */
 export interface Achievement {
   id: string;
@@ -181,7 +180,7 @@ export default function ProfilePage() {
   const categoriesExplored = useMemo(() => {
     const cats = new Set<string>();
     shelf.forEach((entry) => {
-      const book = (entry.books as unknown as { category?: string } | null);
+      const book = (entry as unknown as { book?: { category?: string } | null }).book;
       if (book?.category) cats.add(book.category);
     });
     return cats;

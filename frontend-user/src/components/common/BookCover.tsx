@@ -1,4 +1,4 @@
-import type { DisplayBook } from '../../types/display';
+import type { DisplayBook } from '../../types';
 
 interface BookCoverProps {
   book: DisplayBook;

@@ -13,7 +13,6 @@ const GENRES = [
   'Fiction', 'Non-Fiction', 'History', 'Religious', 'Poetry',
   'Novel', 'Short Stories', 'Spiritual', 'Travel', 'Biography', 'Academic', 'Children',
 ];
-const LANGUAGES = ['Mizo', 'English', 'Hmar', 'Chakma', 'Hindi'];
 const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.epub';
 
 type Step = 'form' | 'review' | 'done';

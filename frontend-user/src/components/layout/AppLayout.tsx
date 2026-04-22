@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useNotifications } from '../../hooks/useNotifications';
+import PWAInstallBanner from '../common/PWAInstallBanner';
+import UpdateNotification from '../common/UpdateNotification';
 
 /* Only 4 nav items — Author Dashboard access lives in Profile page */
 const NAV_ITEMS = [
@@ -124,6 +126,9 @@ export default function AppLayout() {
 
   return (
     <div className="app-layout">
+      {/* ── PWA Install Banner ────────────────────────────────── */}
+      <PWAInstallBanner />
+
       {/* ── Approval Popup ──────────────────────────────────────── */}
       {approvalPopup && (
         <div className="author-approval-popup">
@@ -182,6 +187,7 @@ export default function AppLayout() {
                   src={profile.avatar_url}
                   alt={profile.full_name ?? 'User'}
                   style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  loading="lazy"
                 />
               ) : (
                 displayInitial
@@ -214,6 +220,9 @@ export default function AppLayout() {
           </NavLink>
         ))}
       </nav>
+
+      {/* ── PWA Update Toast ──────────────────────────────────────── */}
+      <UpdateNotification />
     </div>
   );
 }

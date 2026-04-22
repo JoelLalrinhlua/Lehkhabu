@@ -6,6 +6,7 @@ import { fetchBookById } from '../services/books.service';
 import type { Book } from '../services/books.service';
 import BookCover from '../components/common/BookCover';
 import BookCard from '../components/common/BookCard';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export default function BookDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +27,47 @@ export default function BookDetailPage() {
       .then((b) => setBook(b))
       .catch(() => setBook(null));
   }, [id, books]);
+
+  // ── Dynamic SEO ──────────────────────────────────────────────
+  const isLoaded = book !== 'loading' && book !== null;
+  usePageMeta(
+    isLoaded
+      ? {
+          title: book.title,
+          description: book.description ?? `Read "${book.title}" by ${book.author_name} on Lehkhabu.`,
+          image: book.cover_image_url ?? undefined,
+          url: `https://lehkhabu.com/book/${book.id}`,
+          type: 'book',
+          structuredData: {
+            '@context': 'https://schema.org',
+            '@type': 'Book',
+            name: book.title,
+            author: {
+              '@type': 'Person',
+              name: book.author_name ?? 'Unknown Author',
+            },
+            description: book.description ?? undefined,
+            image: book.cover_image_url ?? undefined,
+            inLanguage: book.language,
+            genre: book.category,
+            url: `https://lehkhabu.com/book/${book.id}`,
+            ...(book.average_rating > 0 && {
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: book.average_rating.toFixed(1),
+                reviewCount: book.rating_count,
+                bestRating: 5,
+                worstRating: 1,
+              },
+            }),
+            ...(book.is_free
+              ? { offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR', availability: 'https://schema.org/InStock' } }
+              : { offers: { '@type': 'Offer', price: book.price.toString(), priceCurrency: 'INR', availability: 'https://schema.org/InStock' } }
+            ),
+          },
+        }
+      : {}
+  );
 
   if (book === 'loading') {
     return (
@@ -81,6 +123,9 @@ export default function BookDetailPage() {
     book.language,
     book.total_pages ? `${book.total_pages} pages` : null,
   ].filter(Boolean) as string[];
+
+  // Suppress unused variable warning — purchases is used by isOwned via store
+  void purchases;
 
   return (
     <div className="page book-detail-v2">

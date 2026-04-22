@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { ALL_ACHIEVEMENTS, type AchievementContext } from './ProfilePage';
-import './ProfilePage.css';
-import './AchievementsPage.css';
+import '../assets/styles/pages/ProfilePage.css';
+import '../assets/styles/pages/AchievementsPage.css';
 
 interface PublicProfile {
   id: string;
@@ -72,8 +72,9 @@ export default function PublicProfilePage() {
 
         if (shelfData) {
           const cats = new Set<string>();
-          shelfData.forEach((entry: { shelf: string; books?: { category?: string } | null }) => {
-            if (entry.books?.category) cats.add(entry.books.category);
+          shelfData.forEach((entry: { shelf: string; books?: Array<{ category?: string }> | null }) => {
+            const book = Array.isArray(entry.books) ? entry.books[0] : entry.books;
+            if (book?.category) cats.add(book.category);
           });
           setCategories(cats);
           setStats({

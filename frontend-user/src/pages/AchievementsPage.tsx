@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useBooksStore } from '../store/booksStore';
 import { ALL_ACHIEVEMENTS, type Achievement, type AchievementContext } from './ProfilePage';
-import './AchievementsPage.css';
-
+import '../assets/styles/pages/AchievementsPage.css';
 /* ── Category config ─────────────────────────────────── */
 const CATEGORIES = [
   { key: 'all',      label: 'All',      icon: '🏅' },
@@ -111,7 +110,7 @@ export default function AchievementsPage() {
   const categoriesExplored = useMemo(() => {
     const cats = new Set<string>();
     shelf.forEach((entry) => {
-      const book = (entry.books as unknown as { category?: string } | null);
+      const book = (entry as unknown as { book?: { category?: string } | null }).book;
       if (book?.category) cats.add(book.category);
     });
     return cats;

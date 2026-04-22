@@ -71,7 +71,6 @@ export async function uploadApplicationFile(userId: string, file: File): Promise
 
   if (error) throw new Error(`File upload failed: ${error.message}`);
 
-  const { data: urlData } = supabase.storage.from('application-files').getPublicUrl(path);
   // For private buckets, create a signed URL valid for 1 year
   const { data: signed, error: signErr } = await supabase.storage
     .from('application-files')

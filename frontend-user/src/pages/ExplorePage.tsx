@@ -1,8 +1,17 @@
+/**
+ * ExplorePage.tsx
+ *
+ * Uses Algolia InstantSearch when configured (VITE_ALGOLIA_APP_ID + VITE_ALGOLIA_SEARCH_KEY).
+ * Falls back seamlessly to the existing Supabase in-memory search when not configured.
+ */
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useBooksStore } from '../store/booksStore';
 import { useAuthStore } from '../store/authStore';
 import BookCover from '../components/common/BookCover';
+import AlgoliaSearch from '../components/search/AlgoliaSearch';
+import { isAlgoliaConfigured } from '../lib/algolia';
+import { usePageMeta } from '../hooks/usePageMeta';
 import type { Book } from '../services/books.service';
 
 /* ── Sort options ─────────────────────────────────────────── */
@@ -23,7 +32,7 @@ const CAT_EMOJI: Record<string, string> = {
   Poetry: '🎭', Spiritual: '🙏', History: '📜', 'Short Stories': '📝',
 };
 
-/* ── Search result card ────────────────────────────────────── */
+/* ── Search result card (Supabase fallback) ────────────────── */
 function SearchBookCard({ book, userId }: { book: Book; userId?: string }) {
   const navigate = useNavigate();
   const { isInWishlist, toggleWishlist } = useBooksStore();
@@ -79,12 +88,10 @@ function SearchBookCard({ book, userId }: { book: Book; userId?: string }) {
   );
 }
 
-/* ── Main ExplorePage ──────────────────────────────────────── */
-export default function ExplorePage() {
+/* ── Supabase fallback search ──────────────────────────────── */
+function SupabaseSearch({ userId }: { userId?: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { books, booksLoading, loadBooks } = useBooksStore();
-  const { profile } = useAuthStore();
-  const userId = profile?.id;
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query,      setQuery ]     = useState(searchParams.get('q') ?? '');
@@ -105,7 +112,7 @@ export default function ExplorePage() {
     if (query)    p.q   = query;
     if (category) p.cat = category;
     setSearchParams(p, { replace: true });
-  }, [query, category]);
+  }, [query, category, setSearchParams]);
 
   /* Unique categories ─────────────────────────────────── */
   const categories = useMemo(
@@ -154,8 +161,7 @@ export default function ExplorePage() {
   const activeFilterCount = [category, showFree, minRating > 0].filter(Boolean).length;
 
   return (
-    <div className="ep-page">
-
+    <>
       {/* ── Search bar ─────────────────────────────────── */}
       <div className="ep-search-wrap">
         <div className="ep-search-bar">
@@ -314,7 +320,27 @@ export default function ExplorePage() {
           )}
         </div>
       )}
+    </>
+  );
+}
 
+/* ── Main ExplorePage ──────────────────────────────────────── */
+export default function ExplorePage() {
+  const { profile } = useAuthStore();
+  const userId = profile?.id;
+
+  usePageMeta({
+    title: 'Explore Books',
+    description: 'Discover thousands of books across all genres. Search by title, author, or category with instant results.',
+  });
+
+  return (
+    <div className="ep-page">
+      {isAlgoliaConfigured ? (
+        <AlgoliaSearch userId={userId} />
+      ) : (
+        <SupabaseSearch userId={userId} />
+      )}
       <div style={{ height: 24 }} />
     </div>
   );

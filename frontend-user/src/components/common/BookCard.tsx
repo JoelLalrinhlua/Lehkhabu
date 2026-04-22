@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import type { DisplayBook } from '../../types/display';
+import type { DisplayBook } from '../../types';
 import BookCover from './BookCover';
 
 interface BookCardProps {

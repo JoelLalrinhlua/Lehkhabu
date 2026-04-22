@@ -21,7 +21,6 @@ const FONTS: Record<Font, { css: string; label: string }> = {
   inter:    { css: '"Inter", system-ui, sans-serif',      label: 'Modern'  },
 };
 
-const SIZES = [14, 16, 18, 20, 22] as const;
 
 interface Cfg { bg: Bg; font: Font; size: number; }
 const DEFAULT_CFG: Cfg = { bg: 'cream', font: 'playfair', size: 17 };
@@ -49,36 +48,10 @@ export default function ReaderPage() {
   const totalPages = (book !== 'loading' && book) ? (book.total_pages ?? 1) : 1;
   const [spread, setSpread]         = useState(0);
   const [flipping, setFlipping]     = useState(false);
-  const [showUI, setShowUI]         = useState(true);
-  const [showSettings, setShowSett] = useState(false);
   const [cfg, setCfg]               = useState<Cfg>(DEFAULT_CFG);
-  const [isDesktop, setIsDesktop]   = useState(() => window.innerWidth > 768);
-
-  const uiTimer = useRef<ReturnType<typeof setTimeout>>();
-  const touchX  = useRef(0);
-
-  // Track viewport size
-  useEffect(() => {
-    const onResize = () => setIsDesktop(window.innerWidth > 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  const touchX                      = useRef(0);
 
   const spreads = totalPages;
-  const leftIdx  = spread;
-  const rightIdx = spread + 1;
-
-  /* ── UI helpers ─────────────────────────────────────────────────── */
-  const bumpUI = useCallback(() => {
-    setShowUI(true);
-    clearTimeout(uiTimer.current);
-    uiTimer.current = setTimeout(() => setShowUI(false), 5000);
-  }, []);
-
-  useEffect(() => {
-    bumpUI();
-    return () => clearTimeout(uiTimer.current);
-  }, [bumpUI]);
 
   const nextSpread = useCallback(() => {
     if (flipping || spread >= spreads - 1) return;
@@ -95,24 +68,25 @@ export default function ReaderPage() {
   // Keyboard nav
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSpread(); bumpUI(); }
-      else if (e.key === 'ArrowLeft')              { e.preventDefault(); prevSpread(); bumpUI(); }
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSpread(); }
+      else if (e.key === 'ArrowLeft')              { e.preventDefault(); prevSpread(); }
       else if (e.key === 'Escape')                 navigate(-1);
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [nextSpread, prevSpread, navigate, bumpUI]);
+  }, [nextSpread, prevSpread, navigate]);
 
   // Touch swipe
   const onTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; };
   const onTouchEnd   = (e: React.TouchEvent) => {
     const dx = e.changedTouches[0].clientX - touchX.current;
-    if (Math.abs(dx) > 60) { dx < 0 ? nextSpread() : prevSpread(); bumpUI(); }
+    if (Math.abs(dx) > 60) { dx < 0 ? nextSpread() : prevSpread(); }
   };
 
+  // cfg updater (used in settings panel when it exists)
   const upd = <K extends keyof Cfg>(k: K, v: Cfg[K]) => setCfg(c => ({ ...c, [k]: v }));
-  const isLast   = spread >= spreads - 1;
-  const progress = spreads > 0 ? ((spread + 1) / spreads) * 100 : 0;
+  void upd;
+
 
   // Loading state
   if (book === 'loading') return (
@@ -137,9 +111,9 @@ export default function ReaderPage() {
 
   // If the book has a file URL, embed it directly
   if (book.file_url) {
-    const t = THEMES[cfg.bg];
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', flexDirection: 'column', background: '#1a1a2e' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', flexDirection: 'column', background: '#1a1a2e' }}
+        onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {/* Minimal toolbar */}
         <div style={{ height: TOOLBAR_H, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, background: 'rgba(0,0,0,0.8)', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
           <button onClick={() => navigate(-1)} style={{ color: '#aaa', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontFamily: 'Inter, sans-serif' }}>
@@ -162,11 +136,11 @@ export default function ReaderPage() {
 
   // No file uploaded yet — show a placeholder reading experience
   const t   = THEMES[cfg.bg];
-  const isDark = cfg.bg === 'night' || cfg.bg === 'forest';
   const fontCss = FONTS[cfg.font].css;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: t.page, flexDirection: 'column', gap: 20 }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: t.page, flexDirection: 'column', gap: 20 }}
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div style={{ fontSize: '3rem' }}>📄</div>
       <div style={{ fontFamily: fontCss, fontSize: '1.4rem', color: t.text, fontWeight: 600 }}>{book.title}</div>
       {book.author_name && <div style={{ color: t.muted, fontSize: '1rem' }}>by {book.author_name}</div>}
