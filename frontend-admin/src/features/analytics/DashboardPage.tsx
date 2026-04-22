@@ -12,7 +12,7 @@ import {
   type DashboardStats,
 } from '../../services/analytics.service';
 import { updateBookStatus } from '../../services/books.service';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 
 // ── Stat Card ───────────────────────────────────────────────────
 function StatCard({
@@ -54,7 +54,7 @@ function LoadingPulse({ rows = 3 }: { rows?: number }) {
 }
 
 export default function DashboardPage() {
-  const { addToast } = useToast();
+  const { addToast } = useAdminContext();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPurchases, setRecentPurchases] = useState<any[]>([]);
   const [topBooks, setTopBooks] = useState<any[]>([]);
@@ -128,7 +128,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {(stats?.pendingBooks ?? 0) > 0 && (
-              <Link to="/books?tab=PENDING_REVIEW" className="btn btn-primary" id="review-pending-btn">
+              <Link to="/books?tab=SUBMITTED" className="btn btn-primary" id="review-pending-btn">
                 <Clock size={15} />
                 {stats?.pendingBooks} Pending Review
               </Link>
@@ -160,7 +160,7 @@ export default function DashboardPage() {
         <StatCard
           label="Total Users" loading={loading}
           value={stats?.totalUsers ?? '—'}
-          sub={`<span class="up">↑ ${stats?.activeUsers ?? 0} active</span> · ${stats?.totalAuthors ?? 0} authors`}
+          sub={`<span class="up">↑ ${stats?.totalAuthors ?? 0} authors</span> · ${stats?.totalUsers ?? 0} total`}
           icon={Users} color="var(--color-blue)" dim="var(--color-blue-dim)" delay={0.1}
         />
         <StatCard
@@ -282,14 +282,14 @@ export default function DashboardPage() {
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{ fontWeight: 700, color: 'var(--color-gold)', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
-                    ₹{p.amount}
+                    {p.isFree ? 'FREE' : `₹${p.amount}`}
                   </div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
                     {p.purchasedAt ? format(new Date(p.purchasedAt), 'MMM d') : '—'}
                   </div>
                 </div>
-                <span className={`badge badge-${(p.status ?? 'PENDING').toLowerCase()}`}>
-                  {p.status === 'COMPLETED' ? 'paid' : (p.status ?? '').toLowerCase()}
+                <span className={`badge ${p.isFree ? 'badge-approved' : 'badge-pending'}`}>
+                  {p.isFree ? 'free' : 'paid'}
                 </span>
               </div>
             ))}
@@ -409,7 +409,7 @@ export default function DashboardPage() {
             {loading ? <LoadingPulse rows={5} /> : stats && [
               { label: 'Total Books', value: stats.totalBooks, max: Math.max(stats.totalBooks, 1), color: 'var(--color-gold)' },
               { label: 'Published', value: stats.publishedBooks, max: Math.max(stats.totalBooks, 1), color: 'var(--color-green)' },
-              { label: 'Active Users', value: stats.activeUsers, max: Math.max(stats.totalUsers, 1), color: 'var(--color-blue)' },
+              { label: 'Pending Review', value: stats.pendingBooks, max: Math.max(stats.totalBooks, 1), color: 'var(--color-gold)' },
               { label: 'Total Authors', value: stats.totalAuthors, max: Math.max(stats.totalUsers, 1), color: 'var(--color-purple)' },
               { label: 'Total Purchases', value: stats.totalPurchases, max: Math.max(stats.totalPurchases, 1), color: 'var(--color-green)' },
             ].map(item => (

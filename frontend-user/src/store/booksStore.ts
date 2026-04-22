@@ -7,8 +7,9 @@ import {
   upsertShelfEntry,
   removeShelfEntry,
   fetchAllReadingProgress,
-  fetchUserPurchases,
 } from '../services/books.service';
+import { fetchUserPurchases } from '../services/purchases.service';
+
 
 interface BooksState {
   // All published books

@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchBookById } from '../services/books.service';
+import { checkOwnership } from '../services/purchases.service';
+import { useAuthStore } from '../store/authStore';
 import type { Book } from '../services/books.service';
 
 /* ── Theme & Font config ─────────────────────────────────────────── */
@@ -30,18 +32,34 @@ const TOOLBAR_H = 52; // px — fixed toolbar height
 export default function ReaderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { profile } = useAuthStore();
 
   const [book, setBook] = useState<Book | null | 'loading'>('loading');
   const [bookLoadError, setBookLoadError] = useState(false);
+  const [accessGranted, setAccessGranted] = useState<boolean | null>(null);
 
-  // Fetch the real book from Supabase
+  // Fetch book and verify ownership
   useEffect(() => {
     if (!id) { setBook(null); return; }
     setBook('loading');
     fetchBookById(id)
-      .then((b) => setBook(b))
-      .catch(() => { setBook(null); setBookLoadError(true); });
-  }, [id]);
+      .then(async (b) => {
+        setBook(b);
+        if (!b) { setAccessGranted(false); return; }
+        if (b.is_free) { setAccessGranted(true); return; }
+        if (!profile?.id) { setAccessGranted(false); return; }
+        const owned = await checkOwnership(profile.id, b.id);
+        setAccessGranted(owned);
+      })
+      .catch(() => { setBook(null); setBookLoadError(true); setAccessGranted(false); });
+  }, [id, profile?.id]);
+
+  // Redirect to book page if not owned
+  useEffect(() => {
+    if (accessGranted === false && book && book !== 'loading') {
+      navigate(`/book/${id}`, { replace: true });
+    }
+  }, [accessGranted, book, id, navigate]);
 
   // Real Book from Supabase has no "content" array — it has a file_url instead
   // We use total_pages for progress display

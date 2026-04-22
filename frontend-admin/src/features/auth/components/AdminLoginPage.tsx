@@ -18,11 +18,13 @@ export default function AdminLoginPage() {
       if (session) {
         const { data } = await supabase
           .from('admin_accounts')
-          .select('id')
-          .eq('email', session.user.email)
+          .select('role')
+          .eq('id', session.user.id)
           .eq('is_active', true)
           .maybeSingle();
-        if (data) { navigate('/', { replace: true }); return; }
+        if (data && ['admin', 'readonly_admin'].includes(data.role ?? '')) {
+          navigate('/', { replace: true }); return;
+        }
       }
       setChecking(false);
     });
@@ -41,23 +43,20 @@ export default function AdminLoginPage() {
       });
       if (authErr) throw new Error('Invalid email or password.');
 
-      // Verify this email is whitelisted in admin_accounts
+      // Verify this user has active admin role in admin_accounts
       const { data: adminRow } = await supabase
         .from('admin_accounts')
-        .select('id')
-        .eq('email', authData.user!.email!)
+        .select('role')
+        .eq('id', authData.user!.id)
         .eq('is_active', true)
         .maybeSingle();
 
-      if (!adminRow) {
+      if (!adminRow || !['admin', 'readonly_admin'].includes(adminRow.role ?? '')) {
         await supabase.auth.signOut();
-        throw new Error('Access denied. This account is not authorised for admin access.');
+        throw new Error('Access denied. This account does not have admin privileges.');
       }
-
-      // Update last_login_at silently (ignore errors)
-      try {
-        await supabase.rpc('record_admin_login');
-      } catch (_) { /* non-critical */ }
+      
+      try { await supabase.rpc('record_admin_login'); } catch (_) { /* non-critical */ }
 
       navigate('/', { replace: true });
     } catch (err: any) {

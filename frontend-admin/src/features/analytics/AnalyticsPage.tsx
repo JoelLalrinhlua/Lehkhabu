@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Users, BookOpen, ShoppingCart } from 'lucide-react';
 import { fetchDashboardStats, type DashboardStats } from '../../services/analytics.service';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 
 // Mock chart data for things not natively aggregated in Postgres yet
 const weeklyUsers = [
@@ -57,7 +57,7 @@ function CustomTooltipRevenue({ active, payload, label }: any) {
 }
 
 export default function AnalyticsPage() {
-  const { addToast } = useToast();
+  const { addToast } = useAdminContext();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -99,7 +99,7 @@ export default function AnalyticsPage() {
         {[
           { label: 'Total Revenue', value: `₹${(totalRev / 1000).toFixed(1)}K`, sub: '↑ 23% from last month', icon: TrendingUp, color: 'var(--color-gold)', dim: 'var(--color-gold-dim)' },
           { label: 'Avg. Order Value', value: `₹${avgOrder.toFixed(0)}`, sub: '↑ 4% from last month', icon: ShoppingCart, color: 'var(--color-green)', dim: 'var(--color-green-dim)' },
-          { label: 'Active Users', value: stats?.activeUsers ?? 0, sub: '↑ 3 new this week', icon: Users, color: 'var(--color-blue)', dim: 'var(--color-blue-dim)' },
+          { label: 'Total Authors', value: stats?.totalAuthors ?? 0, sub: `${stats?.totalUsers ?? 0} total users`, icon: Users, color: 'var(--color-blue)', dim: 'var(--color-blue-dim)' },
           { label: 'Conversion Rate', value: `${convRate}%`, sub: 'Users → Buyers', icon: BookOpen, color: 'var(--color-purple)', dim: 'var(--color-purple-dim)' },
         ].map((s, i) => {
           const Icon = s.icon;

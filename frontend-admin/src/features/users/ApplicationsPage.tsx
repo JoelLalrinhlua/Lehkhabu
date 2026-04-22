@@ -10,7 +10,7 @@ import {
   subscribeToApplicationChanges,
   type AdminApplication,
 } from '../../services/users.service';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 import { format } from 'date-fns';
 
 /* ── Config ─────────────────────────────────────────────────────── */
@@ -36,7 +36,7 @@ const AVATAR_COLORS = ['#C17817', '#4F8EF7', '#34D399', '#A78BFA', '#F87171', '#
 /* ── Component ──────────────────────────────────────────────────── */
 
 export default function ApplicationsPage() {
-  const { addToast } = useToast();
+  const { addToast, adminRole } = useAdminContext();
   const [apps, setApps]           = useState<AdminApplication[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -332,7 +332,7 @@ export default function ApplicationsPage() {
                   )}
 
                   {/* Action buttons (only for PENDING) */}
-                  {app.status === 'PENDING' && (
+                  {adminRole !== 'readonly_admin' && app.status === 'PENDING' && (
                     <div style={{ display: 'flex', gap: 10 }}>
                       <button
                         className="btn btn-success btn-sm"

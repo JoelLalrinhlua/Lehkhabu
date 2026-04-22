@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthStore } from '../store/authStore';
 import {
-  fetchMyAuthorProfile,
-  fetchMyBooks,
+  fetchAuthorDashboard,
   createBook,
   updateBook,
   deleteBook,
   uploadBookCover,
   uploadBookFile,
+  submitBookForReview,
+  resubmitBook,
   type AuthorBook,
+  type AuthorAnalytics,
 } from '../services/author.service';
 
 const GENRES = [
@@ -57,12 +59,14 @@ const emptyForm = (): BookFormState => ({
 });
 
 function formatBookStatus(status: AuthorBook['status']) {
-  const map: Record<AuthorBook['status'], { label: string; cls: string }> = {
-    DRAFT:          { label: '✏️ Draft',          cls: 'status-draft' },
-    PENDING_REVIEW: { label: '⏳ Under Review',   cls: 'status-pending' },
-    PUBLISHED:      { label: '✅ Published',       cls: 'status-published' },
-    REJECTED:       { label: '❌ Rejected',        cls: 'status-rejected' },
-    ARCHIVED:       { label: '🗃 Archived',        cls: 'status-archived' },
+  const map: Record<string, { label: string; cls: string }> = {
+    DRAFT:         { label: '✏️ Draft',            cls: 'status-draft' },
+    SUBMITTED:     { label: '📤 Submitted',        cls: 'status-pending' },
+    UNDER_REVIEW:  { label: '🔍 Under Review',     cls: 'status-pending' },
+    APPROVED:      { label: '✅ Approved',          cls: 'status-published' },
+    PUBLISHED:     { label: '🚀 Published',         cls: 'status-published' },
+    REJECTED:      { label: '❌ Rejected',          cls: 'status-rejected' },
+    NEEDS_CHANGES: { label: '📝 Needs Changes',    cls: 'status-archived' },
   };
   return map[status] ?? { label: status, cls: '' };
 }
@@ -72,6 +76,7 @@ export default function AuthorDashboardPage() {
 
   const [authorProfile, setAuthorProfile] = useState<{ id: string } | null>(null);
   const [books, setBooks] = useState<AuthorBook[]>([]);
+  const [analytics, setAnalytics] = useState<AuthorAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,12 +110,11 @@ export default function AuthorDashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const ap = await fetchMyAuthorProfile(userId);
-      setAuthorProfile(ap);
-      if (ap) {
-        const bks = await fetchMyBooks(ap.id);
-        setBooks(bks);
-      }
+      // Single RPC call loads profile + books + analytics in one round trip
+      const { authorProfile: ap, books: bks, analytics: an } = await fetchAuthorDashboard(userId);
+      setAuthorProfile(ap as { id: string } | null);
+      setBooks(bks);
+      setAnalytics(an);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -120,14 +124,14 @@ export default function AuthorDashboardPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Stats
+  // Fallback client-side stats if analytics RPC hasn't run yet
   const publishedBooks = books.filter((b) => b.status === 'PUBLISHED');
-  const totalViews = books.reduce((s, b) => s + (b.view_count ?? 0), 0);
-  const totalPurchases = books.reduce((s, b) => s + b.purchase_count, 0);
-  const avgRating = publishedBooks.length > 0
+  const totalViews = analytics?.totalViews ?? books.reduce((s, b) => s + (b.view_count ?? 0), 0);
+  const totalPurchases = analytics?.totalPurchases ?? books.reduce((s, b) => s + b.purchase_count, 0);
+  const avgRating = analytics?.avgRating ?? (publishedBooks.length > 0
     ? publishedBooks.filter((b) => b.average_rating > 0).reduce((s, b) => s + b.average_rating, 0)
       / (publishedBooks.filter((b) => b.average_rating > 0).length || 1)
-    : 0;
+    : 0);
 
   function openCreate() {
     setModalMode('create');
@@ -243,7 +247,7 @@ export default function AuthorDashboardPage() {
           coverColorSecondary: form.coverColorSecondary,
         });
         setBooks((prev) => [newBook, ...prev]);
-        setSuccessMsg('🎉 Book published successfully!');
+        setSuccessMsg('📄 Book saved as Draft. Submit it for review when ready!');
       } else if (editingBook) {
         const updated = await updateBook(editingBook.id, {
           title: form.title,
@@ -432,10 +436,38 @@ export default function AuthorDashboardPage() {
 
                   {/* Actions */}
                   <div className="author-book-actions">
+                    {/* Admin feedback for NEEDS_CHANGES */}
+                    {book.status === 'NEEDS_CHANGES' && book.admin_notes && (
+                      <div className="author-book-feedback">
+                        <strong>Feedback:</strong> {book.admin_notes}
+                      </div>
+                    )}
+                    {(book.status === 'DRAFT' || book.status === 'NEEDS_CHANGES') && (
+                      <button
+                        className="author-book-action-btn"
+                        title="Submit for Review"
+                        onClick={async () => {
+                          try {
+                            const updated = book.status === 'NEEDS_CHANGES'
+                              ? await resubmitBook(book.id)
+                              : await submitBookForReview(book.id);
+                            setBooks(prev => prev.map(b => b.id === updated.id ? updated : b));
+                            setSuccessMsg('📤 Book submitted for review!');
+                            setTimeout(() => setSuccessMsg(null), 3000);
+                          } catch (e) {
+                            setSubmitError(e instanceof Error ? e.message : 'Submit failed');
+                          }
+                        }}
+                        style={{ fontSize: '0.78rem', padding: '0 12px', width: 'auto', fontWeight: 600, color: 'var(--color-blue)', borderColor: 'var(--color-blue-dim)', background: 'rgba(79,142,247,0.06)' }}
+                      >
+                        Submit
+                      </button>
+                    )}
                     <button
                       className="author-book-action-btn"
                       title="Edit"
                       onClick={() => openEdit(book)}
+                      disabled={!['DRAFT', 'NEEDS_CHANGES', 'REJECTED'].includes(book.status)}
                     >
                       ✏️
                     </button>
@@ -443,6 +475,7 @@ export default function AuthorDashboardPage() {
                       className="author-book-action-btn author-book-action-delete"
                       title="Delete"
                       onClick={() => setDeleteConfirm(book.id)}
+                      disabled={!['DRAFT', 'REJECTED'].includes(book.status)}
                     >
                       🗑️
                     </button>
@@ -573,32 +606,38 @@ export default function AuthorDashboardPage() {
                 {formErrors.description && <span className="app-field-error">{formErrors.description}</span>}
               </div>
 
-              {/* Genre & Language */}
-              <div className="app-fields-row">
-                <div className="app-field">
-                  <label>Category *</label>
-                  <select
-                    className={`app-select ${formErrors.category ? 'app-input-error' : ''}`}
-                    value={form.category}
-                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  >
-                    <option value="">Select category</option>
-                    {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                  {formErrors.category && <span className="app-field-error">{formErrors.category}</span>}
+              {/* Category */}
+              <div className="app-field">
+                <label>Category *</label>
+                <div className="app-radio-group">
+                  {GENRES.map((g) => (
+                    <div
+                      key={g}
+                      className={`app-radio-pill ${form.category === g ? 'selected' : ''}`}
+                      onClick={() => setForm((f) => ({ ...f, category: g }))}
+                    >
+                      {g}
+                    </div>
+                  ))}
                 </div>
-                <div className="app-field">
-                  <label>Language *</label>
-                  <select
-                    className={`app-select ${formErrors.language ? 'app-input-error' : ''}`}
-                    value={form.language}
-                    onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}
-                  >
-                    <option value="">Select language</option>
-                    {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                  {formErrors.language && <span className="app-field-error">{formErrors.language}</span>}
+                {formErrors.category && <span className="app-field-error" style={{ marginTop: 8, display: 'block' }}>{formErrors.category}</span>}
+              </div>
+
+              {/* Language */}
+              <div className="app-field">
+                <label>Language *</label>
+                <div className="app-radio-group">
+                  {LANGUAGES.map((l) => (
+                    <div
+                      key={l}
+                      className={`app-radio-pill ${form.language === l ? 'selected' : ''}`}
+                      onClick={() => setForm((f) => ({ ...f, language: l }))}
+                    >
+                      {l}
+                    </div>
+                  ))}
                 </div>
+                {formErrors.language && <span className="app-field-error" style={{ marginTop: 8, display: 'block' }}>{formErrors.language}</span>}
               </div>
 
               {/* Tags */}
@@ -668,7 +707,7 @@ export default function AuthorDashboardPage() {
                   ? uploadingCover ? 'Uploading cover…'
                     : uploadingBook ? 'Uploading file…'
                     : 'Saving…'
-                  : modalMode === 'create' ? '🚀 Publish Book' : '✅ Save Changes'}
+                  : modalMode === 'create' ? '💾 Save as Draft' : '✅ Save Changes'}
               </button>
             </div>
           </div>

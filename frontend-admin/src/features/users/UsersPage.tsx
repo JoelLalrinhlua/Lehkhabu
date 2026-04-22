@@ -7,7 +7,7 @@ import {
   fetchUsers, updateUserActive, updateUserRole,
   subscribeToUserChanges, type AdminUser,
 } from '../../services/users.service';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 import { format } from 'date-fns';
 
 /* ── Config ────────────────────────────────────────────────────────── */
@@ -33,7 +33,7 @@ const getRoleBadge = (role: AdminUser['role']) => {
 /* ── Component ─────────────────────────────────────────────────────── */
 
 export default function UsersPage() {
-  const { addToast } = useToast();
+  const { addToast, adminRole } = useAdminContext();
   const [users, setUsers]           = useState<AdminUser[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -303,9 +303,9 @@ export default function UsersPage() {
                             <div className="dropdown-divider" />
 
                             {/* Role management — ADMIN accounts are locked */}
-                            {user.role === 'ADMIN' ? (
+                            {user.role === 'ADMIN' || adminRole === 'readonly_admin' ? (
                               <div className="dropdown-item" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
-                                <UserCheck size={14} /> Admin (cannot change)
+                                <UserCheck size={14} /> {adminRole === 'readonly_admin' ? 'Read-only Access' : 'Admin (cannot change)'}
                               </div>
                             ) : (
                               <>
@@ -331,9 +331,11 @@ export default function UsersPage() {
                             <div className="dropdown-divider" />
 
                             {/* Suspend / reactivate */}
-                            <div className="dropdown-item danger" onClick={() => toggleSuspend(user)}>
-                              <ShieldBan size={14} /> {user.isActive ? 'Suspend' : 'Reactivate'}
-                            </div>
+                            {adminRole !== 'readonly_admin' && (
+                              <div className="dropdown-item danger" onClick={() => toggleSuspend(user)}>
+                                <ShieldBan size={14} /> {user.isActive ? 'Suspend' : 'Reactivate'}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -404,13 +406,15 @@ export default function UsersPage() {
             )}
 
             <div className="modal-footer">
-              <button
-                className="btn btn-danger btn-sm"
-                disabled={mutatingId === viewUser.id || viewUser.role === 'ADMIN'}
-                onClick={() => toggleSuspend(viewUser)}
-              >
-                <ShieldBan size={14} /> {viewUser.isActive ? 'Suspend' : 'Reactivate'}
-              </button>
+              {adminRole !== 'readonly_admin' && (
+                <button
+                  className="btn btn-danger btn-sm"
+                  disabled={mutatingId === viewUser.id || viewUser.role === 'ADMIN'}
+                  onClick={() => toggleSuspend(viewUser)}
+                >
+                  <ShieldBan size={14} /> {viewUser.isActive ? 'Suspend' : 'Reactivate'}
+                </button>
+              )}
               <button className="btn btn-secondary" onClick={() => setViewUser(null)}>Close</button>
             </div>
           </div>

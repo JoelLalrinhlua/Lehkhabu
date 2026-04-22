@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Save, Key, Database, Mail, Globe, CreditCard, Shield, Lock, RefreshCw, Server } from 'lucide-react';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 import { fetchSettings, updateSettings } from '../../services/settings.service';
 
 function SectionHead({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
@@ -63,7 +63,7 @@ function ToggleRow({ label, description, value, onChange, id }: {
 }
 
 export default function SettingsPage() {
-  const { addToast } = useToast();
+  const { addToast, adminRole } = useAdminContext();
   const [cfg, setCfg] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -129,7 +129,7 @@ export default function SettingsPage() {
             <h1>Platform Settings</h1>
             <p>Configure backend services, integrations, and security settings.</p>
           </div>
-          <button className="btn btn-primary" onClick={save} disabled={saving} id="save-platform-btn">
+          <button className="btn btn-primary" onClick={save} disabled={saving || adminRole === 'readonly_admin'} id="save-platform-btn" style={{ opacity: adminRole === 'readonly_admin' ? 0.5 : 1, cursor: adminRole === 'readonly_admin' ? 'not-allowed' : 'pointer' }}>
             <Save size={15} /> {saving ? 'Saving…' : 'Save All Settings'}
           </button>
         </div>
@@ -241,7 +241,7 @@ export default function SettingsPage() {
               <div key={action.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: 14 }}>
                 <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{action.label}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 10 }}>{action.sub}</div>
-                <button className="btn btn-secondary btn-sm" onClick={action.action} id={action.id}>Run</button>
+                <button className="btn btn-secondary btn-sm" disabled={adminRole === 'readonly_admin'} onClick={action.action} id={action.id}>Run</button>
               </div>
             ))}
           </div>

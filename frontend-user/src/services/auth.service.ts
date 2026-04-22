@@ -44,6 +44,21 @@ export async function signUp({ email, password, fullName, username }: SignUpData
 export async function signIn({ email, password }: SignInData) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
+
+  // Prevent admins from logging in via the user app
+  if (data.user) {
+    const { data: adminRow } = await supabase
+      .from('admin_accounts')
+      .select('id')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (adminRow) {
+      await supabase.auth.signOut();
+      throw new Error('Admin accounts cannot log in to the user application. Please use the Admin Portal.');
+    }
+  }
+
   return data;
 }
 

@@ -65,7 +65,7 @@ export async function fetchUsers(): Promise<AdminUser[]> {
       .order('created_at', { ascending: false }),
     supabase
       .from('purchases')
-      .select('user_id, amount')
+      .select('user_id, amount_paid')
       .eq('status', 'COMPLETED'),
   ]);
 
@@ -73,10 +73,10 @@ export async function fetchUsers(): Promise<AdminUser[]> {
 
   // Aggregate purchase stats per user from parallel response
   const statsByUser: Record<string, { count: number; spent: number }> = {};
-  (purchaseRes.data ?? []).forEach((p: { user_id: string; amount: number | null }) => {
+  (purchaseRes.data ?? []).forEach((p: { user_id: string; amount_paid: number | null }) => {
     if (!statsByUser[p.user_id]) statsByUser[p.user_id] = { count: 0, spent: 0 };
     statsByUser[p.user_id].count += 1;
-    statsByUser[p.user_id].spent += p.amount ?? 0;
+    statsByUser[p.user_id].spent += p.amount_paid ?? 0;
   });
 
   return (usersRes.data ?? []).map((u: {
@@ -262,11 +262,12 @@ export async function rejectApplication(applicationId: string, adminNotes?: stri
 
   // Send notification
   if (app?.user_id) {
-    await supabase.rpc('create_author_approval_notification', {
+    const { error: rpcErr } = await supabase.rpc('create_author_approval_notification', {
       p_user_id: app.user_id,
       p_status: 'REJECTED',
       p_admin_notes: adminNotes ?? null,
-    }).catch(console.warn);
+    });
+    if (rpcErr) console.warn('Failed to send rejection notification:', rpcErr);
   }
 }
 
@@ -301,32 +302,5 @@ export function subscribeToUserChanges(onRefresh: () => void) {
 // Keep old name for backward compatibility
 export const subscribeToAllApplications = subscribeToApplicationChanges;
 
-/* ── Admin Accounts ──────────────────────────────────────────────── */
-
-export async function fetchAdminAccounts() {
-  const { data, error } = await supabase
-    .from('admin_accounts')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function createAdminAccount(
-  email: string,
-  fullName: string,
-  role: 'admin' | 'super_admin' = 'admin'
-) {
-  const { error } = await supabase
-    .from('admin_accounts')
-    .insert({ email, full_name: fullName, role });
-  if (error) throw error;
-}
-
-export async function toggleAdminActive(adminId: string, isActive: boolean) {
-  const { error } = await supabase
-    .from('admin_accounts')
-    .update({ is_active: isActive })
-    .eq('id', adminId);
-  if (error) throw error;
-}
+// Admin accounts functions removed — admin_accounts table does not exist.
+// Admins are managed via the users table with role = 'admin'.

@@ -3,7 +3,16 @@ import { supabase } from '../lib/supabase';
 /* ── Types ──────────────────────────────────────────────────────── */
 
 export type ApplicationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type BookStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED' | 'ARCHIVED';
+
+// 7-stage publishing workflow
+export type BookStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'UNDER_REVIEW'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'NEEDS_CHANGES'
+  | 'PUBLISHED';
 
 export interface AuthorApplication {
   id: string;
@@ -30,6 +39,7 @@ export interface AuthorBook {
   language: string;
   category: string;
   tags: string[];
+  isbn: string | null;
   cover_image_url: string | null;
   file_url: string | null;
   cover_color_primary: string | null;
@@ -37,14 +47,30 @@ export interface AuthorBook {
   price: number;
   is_free: boolean;
   total_pages: number | null;
+  preview_pages: number | null;
   average_rating: number;
   rating_count: number;
   purchase_count: number;
   view_count: number;
   status: BookStatus;
+  admin_notes: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AuthorAnalytics {
+  totalBooks: number;
+  publishedBooks: number;
+  pendingBooks: number;
+  totalPurchases: number;
+  freeClaims: number;
+  paidPurchases: number;
+  totalRevenue: number;
+  avgRating: number;
+  totalViews: number;
 }
 
 export interface Notification {
@@ -71,7 +97,6 @@ export async function uploadApplicationFile(userId: string, file: File): Promise
 
   if (error) throw new Error(`File upload failed: ${error.message}`);
 
-  // For private buckets, create a signed URL valid for 1 year
   const { data: signed, error: signErr } = await supabase.storage
     .from('application-files')
     .createSignedUrl(path, 60 * 60 * 24 * 365);
@@ -90,7 +115,6 @@ export async function submitAuthorApplication(payload: {
   sampleFileUrl?: string;
   sampleFileName?: string;
 }): Promise<AuthorApplication> {
-  // Check for existing pending/approved application
   const { data: existing } = await supabase
     .from('author_applications')
     .select('id, status')
@@ -149,6 +173,53 @@ export async function fetchMyAuthorProfile(userId: string) {
   return data;
 }
 
+/**
+ * Load ALL author dashboard data in ONE round trip via SECURITY DEFINER RPC.
+ * Returns { authorProfile, books, analytics } or throws on error.
+ * Falls back gracefully on RPC unavailability.
+ */
+export async function fetchAuthorDashboard(userId: string): Promise<{
+  authorProfile: Record<string, unknown> | null;
+  books: AuthorBook[];
+  analytics: AuthorAnalytics;
+}> {
+  const { data, error } = await supabase.rpc('get_author_dashboard', { p_user_id: userId });
+
+  if (error || !data || data.error) {
+    // Fallback: run queries separately
+    const profile = await fetchMyAuthorProfile(userId);
+    if (!profile) {
+      return {
+        authorProfile: null,
+        books: [],
+        analytics: { totalBooks: 0, publishedBooks: 0, pendingBooks: 0, totalPurchases: 0, freeClaims: 0, paidPurchases: 0, totalRevenue: 0, avgRating: 0, totalViews: 0 },
+      };
+    }
+    const books = await fetchMyBooks(profile.id);
+    const analytics = await fetchAuthorAnalytics(profile.id);
+    return { authorProfile: profile, books, analytics };
+  }
+
+  const raw = data as { author_profile: Record<string, unknown>; books: AuthorBook[] | null; analytics: Record<string, number> };
+  const an = raw.analytics ?? {};
+
+  return {
+    authorProfile: raw.author_profile ?? null,
+    books: (raw.books ?? []) as AuthorBook[],
+    analytics: {
+      totalBooks: (an.total_books as number) ?? 0,
+      publishedBooks: (an.published_books as number) ?? 0,
+      pendingBooks: (an.pending_books as number) ?? 0,
+      totalPurchases: (an.total_purchases as number) ?? 0,
+      freeClaims: 0,
+      paidPurchases: (an.total_purchases as number) ?? 0,
+      totalRevenue: (an.total_revenue as number) ?? 0,
+      avgRating: Number((an.avg_rating as number ?? 0).toFixed(2)),
+      totalViews: (an.total_views as number) ?? 0,
+    },
+  };
+}
+
 /** Fetch all books by the current author (all statuses) */
 export async function fetchMyBooks(authorProfileId: string): Promise<AuthorBook[]> {
   const { data, error } = await supabase
@@ -187,7 +258,6 @@ export async function uploadBookFile(authorId: string, file: File): Promise<stri
 
   if (error) throw new Error(`File upload failed: ${error.message}`);
 
-  // Return a 1-year signed URL (private bucket)
   const { data, error: signErr } = await supabase.storage
     .from('book-files')
     .createSignedUrl(path, 60 * 60 * 24 * 365);
@@ -196,7 +266,7 @@ export async function uploadBookFile(authorId: string, file: File): Promise<stri
   return data.signedUrl;
 }
 
-/** Create a new book draft */
+/** Create a new book as DRAFT */
 export async function createBook(payload: {
   authorProfileId: string;
   title: string;
@@ -207,12 +277,13 @@ export async function createBook(payload: {
   price: number;
   isFree: boolean;
   totalPages?: number;
+  previewPages?: number;
+  isbn?: string;
   coverImageUrl?: string;
   fileUrl?: string;
   coverColorPrimary?: string;
   coverColorSecondary?: string;
 }): Promise<AuthorBook> {
-  // Generate slug
   const slug = `${payload.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 80)}-${Date.now().toString(36)}`;
 
   const { data, error } = await supabase
@@ -228,12 +299,13 @@ export async function createBook(payload: {
       price: payload.price,
       is_free: payload.isFree,
       total_pages: payload.totalPages ?? null,
+      preview_pages: payload.previewPages ?? 0,
+      isbn: payload.isbn ?? null,
       cover_image_url: payload.coverImageUrl ?? null,
       file_url: payload.fileUrl ?? null,
       cover_color_primary: payload.coverColorPrimary ?? null,
       cover_color_secondary: payload.coverColorSecondary ?? null,
-      status: 'PUBLISHED', // Authors can publish directly
-      published_at: new Date().toISOString(),
+      status: 'DRAFT',  // Always starts as DRAFT — admin approval required
     })
     .select()
     .single();
@@ -252,6 +324,8 @@ export async function updateBook(bookId: string, updates: Partial<{
   price: number;
   isFree: boolean;
   totalPages: number;
+  previewPages: number;
+  isbn: string;
   coverImageUrl: string;
   fileUrl: string;
   coverColorPrimary: string;
@@ -266,6 +340,8 @@ export async function updateBook(bookId: string, updates: Partial<{
   if (updates.price !== undefined) dbUpdates.price = updates.price;
   if (updates.isFree !== undefined) dbUpdates.is_free = updates.isFree;
   if (updates.totalPages !== undefined) dbUpdates.total_pages = updates.totalPages;
+  if (updates.previewPages !== undefined) dbUpdates.preview_pages = updates.previewPages;
+  if (updates.isbn !== undefined) dbUpdates.isbn = updates.isbn;
   if (updates.coverImageUrl !== undefined) dbUpdates.cover_image_url = updates.coverImageUrl;
   if (updates.fileUrl !== undefined) dbUpdates.file_url = updates.fileUrl;
   if (updates.coverColorPrimary !== undefined) dbUpdates.cover_color_primary = updates.coverColorPrimary;
@@ -283,15 +359,80 @@ export async function updateBook(bookId: string, updates: Partial<{
   return data as AuthorBook;
 }
 
-/** Delete a book */
+/** Submit a DRAFT book for admin review */
+export async function submitBookForReview(bookId: string): Promise<AuthorBook> {
+  const { data, error } = await supabase
+    .from('books')
+    .update({ status: 'SUBMITTED', submitted_at: new Date().toISOString() })
+    .eq('id', bookId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as AuthorBook;
+}
+
+/** Resubmit a NEEDS_CHANGES book after addressing feedback */
+export async function resubmitBook(bookId: string): Promise<AuthorBook> {
+  const { data, error } = await supabase
+    .from('books')
+    .update({ status: 'SUBMITTED', admin_notes: null, submitted_at: new Date().toISOString() })
+    .eq('id', bookId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as AuthorBook;
+}
+
+/** Delete a book (only DRAFT or REJECTED can be deleted by author) */
 export async function deleteBook(bookId: string): Promise<void> {
   const { error } = await supabase.from('books').delete().eq('id', bookId);
   if (error) throw error;
 }
 
+/** Fetch author analytics */
+export async function fetchAuthorAnalytics(authorProfileId: string): Promise<AuthorAnalytics> {
+  const [booksRes, purchasesRes] = await Promise.all([
+    supabase.from('books').select('status, average_rating, view_count, is_free').eq('author_id', authorProfileId),
+    supabase.from('purchases')
+      .select('is_free, amount_paid, status')
+      .in('book_id', 
+        await supabase.from('books').select('id').eq('author_id', authorProfileId)
+          .then(r => (r.data ?? []).map((b: { id: string }) => b.id))
+      )
+      .eq('status', 'COMPLETED'),
+  ]);
+
+  const books = booksRes.data ?? [];
+  const purchases = purchasesRes.data ?? [];
+
+  const published = books.filter(b => b.status === 'PUBLISHED');
+  const pending = books.filter(b => ['SUBMITTED', 'UNDER_REVIEW'].includes(b.status));
+  const freeClaims = purchases.filter((p: { is_free: boolean }) => p.is_free).length;
+  const paidPurchases = purchases.filter((p: { is_free: boolean }) => !p.is_free).length;
+  const totalRevenue = purchases.reduce((s: number, p: { amount_paid: number }) => s + (p.amount_paid ?? 0), 0);
+  const ratingsWithValue = published.filter(b => (b.average_rating ?? 0) > 0);
+  const avgRating = ratingsWithValue.length > 0
+    ? ratingsWithValue.reduce((s, b) => s + b.average_rating, 0) / ratingsWithValue.length
+    : 0;
+  const totalViews = books.reduce((s, b) => s + (b.view_count ?? 0), 0);
+
+  return {
+    totalBooks: books.length,
+    publishedBooks: published.length,
+    pendingBooks: pending.length,
+    totalPurchases: purchases.length,
+    freeClaims,
+    paidPurchases,
+    totalRevenue,
+    avgRating,
+    totalViews,
+  };
+}
+
 /* ── Notifications ──────────────────────────────────────────────── */
 
-/** Fetch unread notifications for the current user */
 export async function fetchNotifications(userId: string): Promise<Notification[]> {
   const { data, error } = await supabase
     .from('notifications')
@@ -304,7 +445,6 @@ export async function fetchNotifications(userId: string): Promise<Notification[]
   return (data ?? []) as Notification[];
 }
 
-/** Mark a notification as read */
 export async function markNotificationRead(notificationId: string): Promise<void> {
   const { error } = await supabase
     .from('notifications')
@@ -313,7 +453,6 @@ export async function markNotificationRead(notificationId: string): Promise<void
   if (error) throw error;
 }
 
-/** Mark all notifications as read for a user */
 export async function markAllNotificationsRead(userId: string): Promise<void> {
   const { error } = await supabase
     .from('notifications')
@@ -323,7 +462,6 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Subscribe to real-time notifications for a user */
 export function subscribeToNotifications(
   userId: string,
   onNew: (notification: Notification) => void
@@ -344,7 +482,6 @@ export function subscribeToNotifications(
     .subscribe();
 }
 
-/** Subscribe to role changes for the current user (real-time) */
 export function subscribeToUserRole(
   userId: string,
   onRoleChange: (newRole: string) => void
@@ -369,7 +506,6 @@ export function subscribeToUserRole(
     .subscribe();
 }
 
-/** Subscribe to application status changes */
 export function subscribeToApplicationStatus(
   userId: string,
   onStatusChange: (status: ApplicationStatus, adminNotes?: string) => void
@@ -387,6 +523,29 @@ export function subscribeToApplicationStatus(
       },
       (payload) => {
         onStatusChange(payload.new.status as ApplicationStatus, payload.new.admin_notes);
+      }
+    )
+    .subscribe();
+}
+
+/** Subscribe to real-time book status changes for an author */
+export function subscribeToBookStatus(
+  authorProfileId: string,
+  onStatusChange: (bookId: string, status: BookStatus, adminNotes?: string) => void
+) {
+  const channelId = `book-status:${authorProfileId}:${Date.now()}`;
+  return supabase
+    .channel(channelId)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'books',
+        filter: `author_id=eq.${authorProfileId}`,
+      },
+      (payload) => {
+        onStatusChange(payload.new.id, payload.new.status as BookStatus, payload.new.admin_notes);
       }
     )
     .subscribe();

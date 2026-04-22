@@ -56,6 +56,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { data: { session } } = await supabase.auth.getSession();
 
     if (session?.user) {
+      // Prevent admins from accessing the user app
+      const { data: adminRow } = await supabase.from('admin_accounts').select('id').eq('id', session.user.id).maybeSingle();
+      if (adminRow) {
+        await supabase.auth.signOut();
+        set({ loading: false, initialized: true });
+        return;
+      }
       set({ session, user: session.user });
       await get().loadProfile(session.user.id);
     }
@@ -65,11 +72,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Listen for auth changes (sign-in, sign-out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      set({ session: newSession, user: newSession?.user ?? null });
       if (newSession?.user) {
+        const { data: adminRow } = await supabase.from('admin_accounts').select('id').eq('id', newSession.user.id).maybeSingle();
+        if (adminRow) {
+          await supabase.auth.signOut();
+          set({ session: null, user: null, profile: null });
+          return;
+        }
+        set({ session: newSession, user: newSession.user });
         await get().loadProfile(newSession.user.id);
       } else {
-        set({ profile: null });
+        set({ session: null, user: null, profile: null });
       }
     });
 

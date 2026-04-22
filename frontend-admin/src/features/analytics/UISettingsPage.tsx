@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Save, Eye, EyeOff, Sliders, Layout, Type, Palette, Bell, Shield, ImageIcon, Upload, RefreshCw } from 'lucide-react';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 import { uploadFeaturesBg, fetchAppSettings, updateSettings } from '../../services/settings.service';
 import type { AppSettings } from '../../services/settings.service';
 
@@ -68,7 +68,7 @@ function SectionHead({ icon: Icon, title, sub }: { icon: React.ElementType; titl
 }
 
 export default function UISettingsPage() {
-  const { addToast } = useToast();
+  const { addToast, adminRole } = useAdminContext();
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [bgUploading, setBgUploading] = useState(false);
@@ -171,7 +171,7 @@ export default function UISettingsPage() {
               {previewMode ? <EyeOff size={15} /> : <Eye size={15} />}
               {previewMode ? 'Hide Preview' : 'Preview'}
             </button>
-            <button className="btn btn-primary" onClick={save} disabled={saving} id="save-ui-settings-btn">
+            <button className="btn btn-primary" onClick={save} disabled={saving || adminRole === 'readonly_admin'} id="save-ui-settings-btn">
               <Save size={15} /> {saving ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
@@ -355,7 +355,7 @@ export default function UISettingsPage() {
                     <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-red)' }}>{action.label}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{action.sub}</div>
                   </div>
-                  <button className="btn btn-danger btn-sm" id={action.id}
+                  <button className="btn btn-danger btn-sm" id={action.id} disabled={adminRole === 'readonly_admin'}
                     onClick={() => addToast(`${action.label} executed.`, 'error')}>
                     Execute
                   </button>
@@ -378,7 +378,7 @@ export default function UISettingsPage() {
           boxShadow: 'var(--shadow-lg)', backdropFilter: 'blur(12px)'
         }}>
           <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Unsaved changes</span>
-          <button className="btn btn-primary" onClick={save} disabled={saving} id="save-ui-sticky-btn" style={{ borderRadius: 'var(--radius-full)' }}>
+          <button className="btn btn-primary" onClick={save} disabled={saving || adminRole === 'readonly_admin'} id="save-ui-sticky-btn" style={{ borderRadius: 'var(--radius-full)' }}>
             <Save size={14} /> {saving ? 'Saving…' : 'Save Settings'}
           </button>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, Download, Eye, XCircle, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 import { format, formatDistanceToNow } from 'date-fns';
 
 type PurchaseStatus = 'COMPLETED' | 'REFUNDED' | 'PENDING' | 'FAILED';
@@ -28,7 +28,7 @@ const STATUS_TABS: { key: 'all' | PurchaseStatus; label: string }[] = [
 const AVATAR_COLORS = ['gold', 'blue', 'green', 'purple', 'red', 'cyan'];
 
 export default function OrdersPage() {
-  const { addToast } = useToast();
+  const { addToast } = useAdminContext();
   const [orders, setOrders] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

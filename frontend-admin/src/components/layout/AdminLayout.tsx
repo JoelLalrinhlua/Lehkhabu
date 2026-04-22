@@ -10,11 +10,14 @@ import { subscribeToApplicationChanges } from '../../services/users.service';
 import { supabase } from '../../lib/supabase';
 import '../../App.css';
 
-/* ── Toast Context ──────────────────────────────────────────────── */
+/* ── Admin Context ──────────────────────────────────────────────── */
 interface Toast { id: string; message: string; type: 'success' | 'error' | 'info'; }
-interface ToastCtx { addToast: (msg: string, type?: Toast['type']) => void; }
-export const ToastContext = createContext<ToastCtx>({ addToast: () => {} });
-export function useToast() { return useContext(ToastContext); }
+interface AdminCtx { 
+  addToast: (msg: string, type?: Toast['type']) => void;
+  adminRole: string;
+}
+export const AdminContext = createContext<AdminCtx>({ addToast: () => {}, adminRole: 'readonly_admin' });
+export function useAdminContext() { return useContext(AdminContext); }
 
 /* ── Nav Items ──────────────────────────────────────────────────── */
 const mainNav = [
@@ -268,31 +271,33 @@ export default function AdminLayout() {
   const [stats, setStats]             = useState<DashboardStats | null>(null);
   const [adminName,  setAdminName]    = useState('');
   const [adminEmail, setAdminEmail]   = useState('');
+  const [adminRole,  setAdminRole]    = useState('');
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Auth guard: verify user is logged in AND exists in admin_accounts whitelist
+  // Auth guard: verify user is logged in AND has admin role in the users table
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         navigate('/login', { replace: true });
         return;
       }
-      // Check against admin_accounts whitelist (email-based, not users.role)
+      // Check admin_accounts for admin/readonly_admin
       const { data: adminRow } = await supabase
         .from('admin_accounts')
-        .select('id, full_name, role')
-        .eq('email', session.user.email!)
+        .select('id, full_name, role, email')
+        .eq('id', session.user.id)
         .eq('is_active', true)
         .maybeSingle();
 
-      if (!adminRow) {
-        // Signed in but not an admin — sign out and redirect
+      if (!adminRow || !['admin', 'readonly_admin'].includes(adminRow.role ?? '')) {
+        // Not an active admin — sign out and redirect
         await supabase.auth.signOut();
         navigate('/login', { replace: true });
         return;
       }
       setAdminName(adminRow.full_name || session.user.email || 'Admin');
-      setAdminEmail(session.user.email || '');
+      setAdminEmail(adminRow.email || session.user.email || '');
+      setAdminRole(adminRow.role || 'readonly_admin');
       setAuthChecked(true);
     });
   }, [navigate]);
@@ -335,7 +340,7 @@ export default function AdminLayout() {
   }
 
   return (
-    <ToastContext.Provider value={{ addToast }}>
+    <AdminContext.Provider value={{ addToast, adminRole }}>
       <div className="admin-shell">
         <Sidebar
           open={sidebarOpen}
@@ -352,6 +357,6 @@ export default function AdminLayout() {
         </div>
       </div>
       <ToastContainer toasts={toasts} remove={removeToast} />
-    </ToastContext.Provider>
+    </AdminContext.Provider>
   );
 }

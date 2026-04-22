@@ -4,13 +4,13 @@ import {
   fetchAnnouncements, createAnnouncement, updateAnnouncement,
   toggleAnnouncementActive, deleteAnnouncement, type AdminAnnouncement,
 } from '../../services/announcements.service';
-import { useToast } from '../../components/layout/AdminLayout';
+import { useAdminContext } from '../../components/layout/AdminLayout';
 import { format } from 'date-fns';
 
 const emptyForm = { title: '', content: '', isActive: true };
 
 export default function AnnouncementsPage() {
-  const { addToast } = useToast();
+  const { addToast, adminRole } = useAdminContext();
   const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,9 +109,11 @@ export default function AnnouncementsPage() {
             <button className="btn btn-secondary btn-sm" onClick={load} id="refresh-announcements-btn">
               <RefreshCw size={14} /> Refresh
             </button>
-            <button className="btn btn-primary" onClick={openCreate} id="create-announcement-btn">
-              <Plus size={16} /> New Announcement
-            </button>
+            {adminRole !== 'readonly_admin' && (
+              <button className="btn btn-primary" onClick={openCreate} id="create-announcement-btn">
+                <Plus size={16} /> New Announcement
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -182,21 +184,25 @@ export default function AnnouncementsPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button className="btn-icon" title={ann.isActive ? 'Hide' : 'Publish'}
-                    disabled={mutatingId === ann.id}
-                    onClick={() => handleToggle(ann)} id={`toggle-ann-${ann.id}`}
-                    style={{ color: ann.isActive ? 'var(--color-gold)' : 'var(--text-muted)' }}>
-                    {ann.isActive ? <Eye size={15} /> : <EyeOff size={15} />}
-                  </button>
-                  <button className="btn-icon" title="Edit" onClick={() => openEdit(ann)} id={`edit-ann-${ann.id}`}>
-                    <Edit2 size={14} />
-                  </button>
-                  <button className="btn-icon" title="Delete"
-                    disabled={mutatingId === ann.id}
-                    style={{ background: 'var(--color-red-dim)', color: 'var(--color-red)', border: 'none' }}
-                    onClick={() => handleDelete(ann)} id={`delete-ann-${ann.id}`}>
-                    <Trash2 size={14} />
-                  </button>
+                  {adminRole !== 'readonly_admin' && (
+                    <>
+                      <button className="btn-icon" title={ann.isActive ? 'Hide' : 'Publish'}
+                        disabled={mutatingId === ann.id}
+                        onClick={() => handleToggle(ann)} id={`toggle-ann-${ann.id}`}
+                        style={{ color: ann.isActive ? 'var(--color-gold)' : 'var(--text-muted)' }}>
+                        {ann.isActive ? <Eye size={15} /> : <EyeOff size={15} />}
+                      </button>
+                      <button className="btn-icon" title="Edit" onClick={() => openEdit(ann)} id={`edit-ann-${ann.id}`}>
+                        <Edit2 size={14} />
+                      </button>
+                      <button className="btn-icon" title="Delete"
+                        disabled={mutatingId === ann.id}
+                        style={{ background: 'var(--color-red-dim)', color: 'var(--color-red)', border: 'none' }}
+                        onClick={() => handleDelete(ann)} id={`delete-ann-${ann.id}`}>
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
