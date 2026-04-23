@@ -13,3 +13,7 @@ AI-powered book marketplace.
 File Download la
 frontend-admin leh frontend-user a hran in dependencies install la (npm install)
 chuan a hran in run rawh (npm run dev).
+
+ADMIN DASHBOARD-
+adminsuper01@lehkhabu.com
+password- AdxmYm@lhbu0129YUI
